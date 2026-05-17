@@ -2135,3 +2135,35 @@ h2 {
 .location-row .inline-button {
   display: none;
 }
+
+.status-tile {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.status-tile .summary-value {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: clamp(1rem, 4vw, 1.16rem);
+  line-height: 1.08;
+  letter-spacing: -0.06em;
+  white-space: nowrap;
+}
+
+.status-tile .summary-label,
+.status-tile .summary-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .status-tile {
+    padding-inline: 8px;
+  }
+
+  .status-tile .summary-value {
+    font-size: 0.98rem;
+  }
+}
