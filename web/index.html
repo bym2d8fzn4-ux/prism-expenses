@@ -127,6 +127,68 @@
     </main>
   </div>
 
+  <div class="report-modal" id="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title" hidden>
+    <div class="report-modal-scrim" id="report-modal-scrim"></div>
+    <form class="report-modal-card report-options-card card" id="report-options-form">
+      <header class="report-modal-header">
+        <div>
+          <p class="eyebrow">Report Options</p>
+          <h2 id="report-modal-title">Export Report</h2>
+          <p class="report-modal-copy">Choose exactly what should be included before the file is created.</p>
+        </div>
+        <button class="inline-button" id="report-close-button" type="button">Cancel</button>
+      </header>
+
+      <section class="report-date-grid">
+        <label class="field">
+          <span>Start date</span>
+          <input id="report-start-date" name="startDate" type="date">
+        </label>
+        <label class="field">
+          <span>End date</span>
+          <input id="report-end-date" name="endDate" type="date">
+        </label>
+      </section>
+
+      <fieldset class="report-option-section">
+        <legend>Entry Type</legend>
+        <div class="report-chip-grid" id="report-type-options"></div>
+      </fieldset>
+
+      <fieldset class="report-option-section">
+        <legend>Status</legend>
+        <div class="report-chip-grid" id="report-status-options"></div>
+      </fieldset>
+
+      <fieldset class="report-option-section">
+        <legend>Categories</legend>
+        <div class="report-chip-grid" id="report-category-options"></div>
+      </fieldset>
+
+      <fieldset class="report-option-section">
+        <legend>Airports</legend>
+        <div class="report-chip-grid" id="report-airport-options"></div>
+      </fieldset>
+
+      <fieldset class="report-option-section">
+        <legend>Aircraft</legend>
+        <div class="report-chip-grid" id="report-aircraft-options"></div>
+      </fieldset>
+
+      <fieldset class="report-option-section">
+        <legend>Trips</legend>
+        <div class="report-chip-grid" id="report-trip-options"></div>
+      </fieldset>
+
+      <p class="report-modal-preview" id="report-preview">0 entries • $0.00</p>
+
+      <div class="report-modal-actions">
+        <button class="inline-button" id="report-cancel-button" type="button">Cancel</button>
+        <button class="primary-button" id="report-export-button" type="submit">Export</button>
+      </div>
+    </form>
+  </div>
+
   <script src="app.js" type="module"></script>
 </body>
 </html>

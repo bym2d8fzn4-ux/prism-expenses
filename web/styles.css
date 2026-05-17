@@ -1127,11 +1127,99 @@ h2 {
 }
 
 .report-modal-actions {
+  position: sticky;
+  bottom: -16px;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
   margin-top: 14px;
+  padding-top: 12px;
+  background: linear-gradient(180deg, rgba(255, 251, 245, 0), rgba(255, 251, 245, 0.98) 34%);
+}
+
+.report-options-card {
+  max-height: min(86vh, 780px);
+  overflow: auto;
+  background: rgba(255, 251, 245, 0.98);
+}
+
+.report-options-card .eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent);
+}
+
+.report-options-card h2 {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--hero-font);
+  font-size: 2rem;
+  font-weight: 400;
+}
+
+.report-date-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-option-section {
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.report-option-section legend {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.report-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-checkbox {
+  position: relative;
+  display: inline-flex;
+}
+
+.report-checkbox input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+.report-checkbox span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(17, 17, 17, 0.12);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.report-checkbox input:checked + span {
+  border-color: rgba(238, 113, 0, 0.5);
+  background: var(--accent);
+  color: #fff;
+}
+
+.report-checkbox input:focus-visible + span {
+  box-shadow: 0 0 0 4px rgba(238, 113, 0, 0.14);
+}
+
+.report-empty-filter {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
 }
 
 .image-modal {

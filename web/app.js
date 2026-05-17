@@ -15,6 +15,7 @@ import {
   getQuickStatusLabel,
   getSavedOptionSettings,
   getStatusBadgeClass,
+  getStatusKey,
   getStatusLabel,
   getToday,
   getTripOptions,
@@ -27,12 +28,25 @@ import {
   validateDates,
 } from "./storage.js";
 
+const EMPTY_REPORT_VALUE = "__empty__";
+const REPORT_TYPE_OPTIONS = [
+  { value: "expense", label: "Expenses" },
+  { value: "incentive", label: "Incentives" },
+];
+const REPORT_STATUS_OPTIONS = [
+  { value: "to-submit", label: "Not Submitted" },
+  { value: "submitted", label: "Submitted" },
+  { value: "reimbursed", label: "Paid" },
+  { value: "archived", label: "Archived" },
+];
+
 const state = {
   currentView: getInitialView(),
   currentRecordType: getInitialRecordType(),
   currentGrouping: getInitialGrouping(),
   expenses: [],
   importMode: "any",
+  pendingReportFormat: "csv",
 };
 
 const elements = {
@@ -55,6 +69,21 @@ const elements = {
   expenseCardTemplate: document.querySelector("#expense-card-template"),
   importInput: document.querySelector("#import-input"),
   storageStatus: document.querySelector("#storage-status"),
+  reportModal: document.querySelector("#report-modal"),
+  reportModalScrim: document.querySelector("#report-modal-scrim"),
+  reportOptionsForm: document.querySelector("#report-options-form"),
+  reportCloseButton: document.querySelector("#report-close-button"),
+  reportCancelButton: document.querySelector("#report-cancel-button"),
+  reportExportButton: document.querySelector("#report-export-button"),
+  reportPreview: document.querySelector("#report-preview"),
+  reportStartDate: document.querySelector("#report-start-date"),
+  reportEndDate: document.querySelector("#report-end-date"),
+  reportTypeOptions: document.querySelector("#report-type-options"),
+  reportStatusOptions: document.querySelector("#report-status-options"),
+  reportCategoryOptions: document.querySelector("#report-category-options"),
+  reportAirportOptions: document.querySelector("#report-airport-options"),
+  reportAircraftOptions: document.querySelector("#report-aircraft-options"),
+  reportTripOptions: document.querySelector("#report-trip-options"),
 };
 
 if (document.readyState === "loading") {
@@ -98,6 +127,13 @@ function bindEvents() {
   elements.expenseList.addEventListener("click", handleExpenseAction);
   elements.expenseList.addEventListener("change", handleInlineDateUpdate);
   elements.importInput.addEventListener("change", importExpenses);
+  elements.reportOptionsForm.addEventListener("submit", handleReportOptionsSubmit);
+  elements.reportOptionsForm.addEventListener("change", updateReportPreview);
+  elements.reportOptionsForm.addEventListener("input", updateReportPreview);
+  elements.reportModalScrim.addEventListener("click", closeReportOptions);
+  elements.reportCloseButton.addEventListener("click", closeReportOptions);
+  elements.reportCancelButton.addEventListener("click", closeReportOptions);
+  document.addEventListener("keydown", handleDocumentKeydown);
 }
 
 async function refreshExpenses(options = {}) {
@@ -1367,9 +1403,9 @@ function handleMenuAction(event) {
   } else if (action === "export-backup") {
     exportExpenses();
   } else if (action === "export-csv") {
-    exportCsvReport();
+    openReportOptions("csv");
   } else if (action === "export-pdf") {
-    exportPdfReport();
+    openReportOptions("pdf");
   } else if (action === "clear") {
     clearAllEntries();
   } else if (action === "archive") {
@@ -1390,15 +1426,251 @@ function exportExpenses() {
   downloadBlob(blob, `expenses-manual-backup-${getToday()}.json`);
 }
 
-function exportCsvReport() {
-  const rows = buildCsvReportRows(state.expenses);
+function openReportOptions(format) {
+  state.pendingReportFormat = format === "pdf" ? "pdf" : "csv";
+  elements.reportOptionsForm.reset();
+  elements.reportExportButton.textContent = state.pendingReportFormat === "pdf" ? "Export PDF" : "Export CSV";
+  populateReportOptions();
+  updateReportPreview();
+  elements.reportModal.hidden = false;
+  document.body.classList.add("modal-open");
+  elements.reportStartDate.focus();
+}
+
+function closeReportOptions() {
+  elements.reportModal.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
+function handleDocumentKeydown(event) {
+  if (event.key === "Escape" && !elements.reportModal.hidden) {
+    closeReportOptions();
+  }
+}
+
+function populateReportOptions() {
+  populateReportCheckboxGroup(elements.reportTypeOptions, "recordType", REPORT_TYPE_OPTIONS);
+  populateReportCheckboxGroup(elements.reportStatusOptions, "status", REPORT_STATUS_OPTIONS);
+  populateReportCheckboxGroup(
+    elements.reportCategoryOptions,
+    "category",
+    getReportFieldOptions((expense) => expense.category, "No Category")
+  );
+  populateReportCheckboxGroup(
+    elements.reportAirportOptions,
+    "airport",
+    getReportFieldOptions((expense) => expense.location, "No Airport")
+  );
+  populateReportCheckboxGroup(
+    elements.reportAircraftOptions,
+    "aircraft",
+    getReportFieldOptions((expense) => expense.aircraft, "No Aircraft")
+  );
+  populateReportCheckboxGroup(
+    elements.reportTripOptions,
+    "trip",
+    getReportFieldOptions((expense) => expense.tripNumber, "No Trip")
+  );
+}
+
+function populateReportCheckboxGroup(container, name, options) {
+  container.replaceChildren();
+
+  if (!options.length) {
+    const empty = document.createElement("p");
+    empty.className = "report-empty-filter";
+    empty.textContent = "No saved values yet.";
+    container.appendChild(empty);
+    return;
+  }
+
+  options.forEach((option) => {
+    container.appendChild(buildReportCheckbox(name, option.value, option.label));
+  });
+}
+
+function buildReportCheckbox(name, value, label) {
+  const wrapper = document.createElement("label");
+  const input = document.createElement("input");
+  const text = document.createElement("span");
+
+  wrapper.className = "report-checkbox";
+  input.type = "checkbox";
+  input.name = name;
+  input.value = encodeReportValue(value);
+  input.checked = true;
+  text.textContent = label;
+  wrapper.append(input, text);
+  return wrapper;
+}
+
+function getReportFieldOptions(getValue, emptyLabel) {
+  const options = new Map();
+
+  state.expenses.forEach((expense) => {
+    const value = normalizeReportValue(getValue(expense));
+    options.set(value, value || emptyLabel);
+  });
+
+  return Array.from(options, ([value, label]) => ({ value, label }))
+    .sort((left, right) => {
+      if (!left.value) {
+        return 1;
+      }
+
+      if (!right.value) {
+        return -1;
+      }
+
+      return left.label.localeCompare(right.label, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
+}
+
+function handleReportOptionsSubmit(event) {
+  event.preventDefault();
+
+  const options = getReportOptions();
+  const dateError = getReportDateError(options);
+  if (dateError) {
+    window.alert(dateError);
+    return;
+  }
+
+  const expenses = filterReportExpenses(options);
+  if (!expenses.length) {
+    window.alert("No entries match those report options.");
+    return;
+  }
+
+  if (state.pendingReportFormat === "pdf") {
+    exportPdfReport(expenses);
+  } else {
+    exportCsvReport(expenses);
+  }
+
+  closeReportOptions();
+}
+
+function updateReportPreview() {
+  const options = getReportOptions();
+  const dateError = getReportDateError(options);
+  if (dateError) {
+    elements.reportPreview.textContent = dateError;
+    return;
+  }
+
+  const expenses = filterReportExpenses(options);
+  const total = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  elements.reportPreview.textContent = `${formatCount(expenses.length)} • ${formatCurrency(total)} selected`;
+}
+
+function getReportOptions() {
+  return {
+    startDate: elements.reportStartDate.value,
+    endDate: elements.reportEndDate.value,
+    recordTypes: getCheckedReportValues("recordType"),
+    statuses: getCheckedReportValues("status"),
+    categories: getCheckedReportValues("category"),
+    airports: getCheckedReportValues("airport"),
+    aircraft: getCheckedReportValues("aircraft"),
+    trips: getCheckedReportValues("trip"),
+    hasCategoryChoices: hasReportChoices("category"),
+    hasAirportChoices: hasReportChoices("airport"),
+    hasAircraftChoices: hasReportChoices("aircraft"),
+    hasTripChoices: hasReportChoices("trip"),
+  };
+}
+
+function getCheckedReportValues(name) {
+  return Array.from(
+    elements.reportOptionsForm.querySelectorAll(`input[name="${name}"]:checked`),
+    (input) => decodeReportValue(input.value)
+  );
+}
+
+function hasReportChoices(name) {
+  return Boolean(elements.reportOptionsForm.querySelector(`input[name="${name}"]`));
+}
+
+function getReportDateError(options) {
+  if (options.startDate && options.endDate && options.startDate > options.endDate) {
+    return "Start date cannot be after end date.";
+  }
+
+  return "";
+}
+
+function filterReportExpenses(options) {
+  return state.expenses.filter((expense) => {
+    const expenseDate = expense.date || "";
+    if (options.startDate && expenseDate < options.startDate) {
+      return false;
+    }
+
+    if (options.endDate && expenseDate > options.endDate) {
+      return false;
+    }
+
+    if (!options.recordTypes.includes(getRecordType(expense))) {
+      return false;
+    }
+
+    if (!options.statuses.includes(getReportStatusKey(expense))) {
+      return false;
+    }
+
+    if (options.hasCategoryChoices && !options.categories.includes(normalizeReportValue(expense.category))) {
+      return false;
+    }
+
+    if (options.hasAirportChoices && !options.airports.includes(normalizeReportValue(expense.location))) {
+      return false;
+    }
+
+    if (options.hasAircraftChoices && !options.aircraft.includes(normalizeReportValue(expense.aircraft))) {
+      return false;
+    }
+
+    if (options.hasTripChoices && !options.trips.includes(normalizeReportValue(expense.tripNumber))) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function getReportStatusKey(expense) {
+  return expense.archivedAt ? "archived" : getStatusKey(expense);
+}
+
+function getReportStatusLabel(expense) {
+  return expense.archivedAt ? "Archived" : getStatusLabel(expense);
+}
+
+function encodeReportValue(value) {
+  return normalizeReportValue(value) || EMPTY_REPORT_VALUE;
+}
+
+function decodeReportValue(value) {
+  return value === EMPTY_REPORT_VALUE ? "" : value;
+}
+
+function normalizeReportValue(value) {
+  return String(value || "").trim();
+}
+
+function exportCsvReport(expenses) {
+  const rows = buildCsvReportRows(expenses);
   const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   downloadBlob(blob, `expenses-report-${getToday()}.csv`);
 }
 
-function exportPdfReport() {
-  const rows = state.expenses;
+function exportPdfReport(expenses) {
+  const rows = expenses;
   const total = rows.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   const reportWindow = window.open("", "_blank");
 
@@ -1446,7 +1718,7 @@ function buildCsvReportRows(expenses) {
     const recordType = getRecordType(expense);
     return [
       recordType === "incentive" ? "Incentive" : "Expense",
-      getStatusLabel(expense),
+      getReportStatusLabel(expense),
       expense.submittedDate ? getExpectedPayoutDate(expense, recordType) : "",
       Number(expense.amount || 0).toFixed(2),
       expense.merchant || "",
@@ -1481,7 +1753,7 @@ function buildPrintableReportHtml(expenses, total) {
           <span>${escapeHtml([expense.category, expense.location, expense.aircraft].filter(Boolean).join(" • "))}</span>
         </td>
         <td>${escapeHtml(formatDate(expense.date))}</td>
-        <td>${escapeHtml(getStatusLabel(expense))}</td>
+        <td>${escapeHtml(getReportStatusLabel(expense))}</td>
         <td class="amount">${escapeHtml(formatCurrency(expense.amount))}</td>
       </tr>
     `)
