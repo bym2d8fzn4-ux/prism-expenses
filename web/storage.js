@@ -28,6 +28,9 @@ const VIEW_CONFIG = {
   },
 };
 
+const DEFAULT_CATEGORY_OPTIONS = ["Lodging", "Meal", "Flight", "Transport", "Supplies", "Miscellaneous"];
+const OPTION_STORAGE_KEY = "expenses-option-settings-v1";
+
 export function getViewConfig(view) {
   return VIEW_CONFIG[view] || VIEW_CONFIG["to-submit"];
 }
@@ -231,36 +234,119 @@ export async function compressImage(file) {
 }
 
 export function buildExportPayload(expenses) {
+  const normalizedExpenses = expenses.map((expense) =>
+    normalizeImportedExpense(expense, () => expense.id || createId())
+  );
+
   return {
     app: "Expenses",
+    schemaVersion: 2,
+    source: "web",
     exportedAt: new Date().toISOString(),
-    expenses,
+    expenses: normalizedExpenses,
     settings: {
-      categoryOptions: ["Lodging", "Meal", "Flight", "Transport", "Supplies", "Miscellaneous"],
-      aircraftOptions: Array.from(new Set(expenses.map((expense) => expense.aircraft).filter(Boolean))),
-      tripOptions: Array.from(new Set(expenses.map((expense) => expense.tripNumber).filter(Boolean))).slice(0, 10),
+      categoryOptions: getCategoryOptions(normalizedExpenses),
+      aircraftOptions: getAircraftOptions(normalizedExpenses),
+      tripOptions: getTripOptions(normalizedExpenses),
     },
   };
 }
 
+export function getSavedOptionSettings() {
+  try {
+    const parsed = JSON.parse(window.localStorage?.getItem(OPTION_STORAGE_KEY) || "{}");
+    return normalizeOptionSettings(parsed);
+  } catch {
+    return normalizeOptionSettings({});
+  }
+}
+
+export function saveOptionSettings(settings) {
+  window.localStorage?.setItem(OPTION_STORAGE_KEY, JSON.stringify(normalizeOptionSettings(settings)));
+}
+
+export function getCategoryOptions(expenses = []) {
+  const settings = getSavedOptionSettings();
+  return uniqueOptions([
+    ...DEFAULT_CATEGORY_OPTIONS,
+    ...settings.categoryOptions,
+    ...expenses.map((expense) => expense.category),
+  ]);
+}
+
+export function getAircraftOptions(expenses = []) {
+  const settings = getSavedOptionSettings();
+  return uniqueOptions([
+    ...settings.aircraftOptions,
+    ...expenses.map((expense) => expense.aircraft),
+  ]);
+}
+
+export function getTripOptions(expenses = []) {
+  const settings = getSavedOptionSettings();
+  return uniqueOptions([
+    ...settings.tripOptions,
+    ...expenses.map((expense) => expense.tripNumber),
+  ]).slice(0, 10);
+}
+
+export function extractImportedExpenseRecords(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  for (const key of ["expenses", "records", "entries", "items"]) {
+    if (Array.isArray(payload[key])) {
+      return payload[key];
+    }
+  }
+
+  if (payload.data && typeof payload.data === "object") {
+    return extractImportedExpenseRecords(payload.data);
+  }
+
+  return [];
+}
+
 export function normalizeImportedExpense(rawExpense, createIdFn = createId) {
+  const source = rawExpense && typeof rawExpense === "object" ? rawExpense : {};
+  const now = new Date().toISOString();
+  const date =
+    normalizeDateValue(readFirst(source, ["date", "expenseDate", "incentiveDate", "transactionDate", "recordDate"])) ||
+    normalizeDateValue(readFirst(source, ["submittedDate", "dateSubmitted", "submittedAt", "submissionDate"])) ||
+    normalizeDateValue(readFirst(source, ["reimbursedDate", "paidDate", "datePaid", "reimbursedAt", "reimbursementDate"])) ||
+    getToday();
+
+  const submittedDate = normalizeDateValue(
+    readFirst(source, ["submittedDate", "dateSubmitted", "submittedAt", "submissionDate", "submitted"])
+  );
+  const reimbursedDate = normalizeDateValue(
+    readFirst(source, ["reimbursedDate", "paidDate", "datePaid", "reimbursedAt", "reimbursementDate", "paid"])
+  );
+
   return {
-    id: rawExpense.id || createIdFn(),
-    recordType: rawExpense.recordType === "incentive" ? "incentive" : "expense",
-    amount: Number(rawExpense.amount || 0),
-    merchant: String(rawExpense.merchant || "Imported expense"),
-    category: String(rawExpense.category || "Miscellaneous"),
-    tripNumber: String(rawExpense.tripNumber || ""),
-    date: rawExpense.date || getToday(),
-    location: String(rawExpense.location || rawExpense.airport || ""),
-    aircraft: String(rawExpense.aircraft || ""),
-    notes: String(rawExpense.notes || ""),
-    submittedDate: rawExpense.submittedDate || rawExpense.dateSubmitted || "",
-    reimbursedDate: rawExpense.reimbursedDate || rawExpense.paidDate || rawExpense.datePaid || "",
-    archivedAt: rawExpense.archivedAt || "",
-    photoDataUrl: String(rawExpense.photoDataUrl || ""),
-    createdAt: rawExpense.createdAt || new Date().toISOString(),
-    updatedAt: rawExpense.updatedAt || new Date().toISOString(),
+    id: String(readFirst(source, ["id", "uuid", "identifier", "externalId"]) || createIdFn()),
+    recordType: normalizeRecordType(readFirst(source, ["recordType", "type", "entryType", "kind"])),
+    amount: normalizeAmount(source),
+    merchant: cleanText(readFirst(source, ["merchant", "vendor", "displayMerchant", "name", "title", "description"])) || "Imported entry",
+    category: cleanText(readFirst(source, ["category", "categoryName"])) || "Miscellaneous",
+    tripNumber: cleanText(readFirst(source, ["tripNumber", "trip", "tripName", "tripId", "tripNo", "tripNumberValue"])),
+    date,
+    location: cleanText(readFirst(source, ["location", "airport", "airportCode"])),
+    aircraft: cleanText(readFirst(source, ["aircraft", "tail", "tailNumber", "tailNumberValue"])).toUpperCase(),
+    notes: cleanText(readFirst(source, ["notes", "memo", "comment", "comments"])),
+    submittedDate,
+    reimbursedDate,
+    archivedAt: normalizeDateValue(readFirst(source, ["archivedAt", "archivedDate", "archiveDate"])),
+    photoDataUrl: cleanText(
+      readFirst(source, ["photoDataUrl", "legacyPhotoDataURL", "receiptImageDataUrl", "receiptPhotoDataUrl"])
+    ),
+    createdAt: normalizeTimestampValue(readFirst(source, ["createdAt", "createdDate"])) || now,
+    updatedAt: normalizeTimestampValue(readFirst(source, ["updatedAt", "updatedDate", "modifiedAt"])) || now,
   };
 }
 
@@ -269,7 +355,150 @@ export function formatCurrency(value) {
 }
 
 export function formatCount(count) {
-  return `${count} ${count === 1 ? "expense" : "expenses"}`;
+  return `${count} ${count === 1 ? "entry" : "entries"}`;
+}
+
+function readFirst(source, keys) {
+  for (const key of keys) {
+    if (Object.hasOwn(source, key) && source[key] !== null && source[key] !== undefined && source[key] !== "") {
+      return source[key];
+    }
+  }
+
+  return "";
+}
+
+function normalizeRecordType(value) {
+  return /incentive/i.test(String(value || "")) ? "incentive" : "expense";
+}
+
+function normalizeAmount(source) {
+  const cents = readFirst(source, ["amountCents", "totalCents"]);
+  if (cents !== "") {
+    const parsedCents = Number.parseFloat(String(cents).replace(/[^0-9.-]/g, ""));
+    if (Number.isFinite(parsedCents)) {
+      return Number((parsedCents / 100).toFixed(2));
+    }
+  }
+
+  const amount = readFirst(source, ["amount", "totalAmount", "total", "finalTotal", "reimbursementAmount"]);
+  const parsedAmount = Number.parseFloat(String(amount || "0").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsedAmount) ? Number(parsedAmount.toFixed(2)) : 0;
+}
+
+function normalizeDateValue(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return dateToIsoDate(value);
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(value > 10_000_000_000 ? value : value * 1000);
+    return Number.isNaN(date.getTime()) ? "" : dateToIsoDate(date);
+  }
+
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const isoPrefix = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoPrefix) {
+    return isValidIsoParts(isoPrefix[1], isoPrefix[2], isoPrefix[3])
+      ? `${isoPrefix[1]}-${isoPrefix[2]}-${isoPrefix[3]}`
+      : "";
+  }
+
+  const numericMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (numericMatch) {
+    let year = Number(numericMatch[3]);
+    if (year < 100) {
+      year += year >= 70 ? 1900 : 2000;
+    }
+
+    const month = Number(numericMatch[1]);
+    const day = Number(numericMatch[2]);
+    return isValidIsoParts(year, month, day)
+      ? `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+      : "";
+  }
+
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? "" : dateToIsoDate(parsed);
+}
+
+function normalizeTimestampValue(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(value > 10_000_000_000 ? value : value * 1000);
+    return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+  }
+
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
+
+function isValidIsoParts(yearValue, monthValue, dayValue) {
+  const year = Number(yearValue);
+  const month = Number(monthValue);
+  const day = Number(dayValue);
+  const candidate = new Date(year, month - 1, day);
+
+  return (
+    Number.isInteger(year) &&
+    Number.isInteger(month) &&
+    Number.isInteger(day) &&
+    candidate.getFullYear() === year &&
+    candidate.getMonth() === month - 1 &&
+    candidate.getDate() === day
+  );
+}
+
+function dateToIsoDate(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function cleanText(value) {
+  return String(value || "").trim();
+}
+
+function uniqueOptions(options) {
+  return options.reduce((result, option) => {
+    const cleaned = cleanText(option);
+    if (!cleaned || result.some((candidate) => candidate.toLowerCase() === cleaned.toLowerCase())) {
+      return result;
+    }
+
+    result.push(cleaned);
+    return result;
+  }, []);
+}
+
+function normalizeOptionSettings(settings) {
+  return {
+    categoryOptions: uniqueOptions(settings?.categoryOptions || settings?.categories || []),
+    aircraftOptions: uniqueOptions(settings?.aircraftOptions || settings?.aircraft || []),
+    tripOptions: uniqueOptions(settings?.tripOptions || settings?.trips || []).slice(0, 10),
+  };
 }
 
 function openDatabase() {

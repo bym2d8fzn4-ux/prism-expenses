@@ -27,11 +27,17 @@
           <span></span>
         </button>
         <div class="menu-popover" id="menu-popover" hidden>
-          <button type="button" data-menu-action="import">Import Backup / CSV</button>
-          <button type="button" data-menu-action="export-backup">Export Backup</button>
-          <a href="report.html">Export Report</a>
-          <button type="button" data-menu-action="archive">Archive</button>
-          <button class="danger-menu-item" type="button" data-menu-action="clear">Delete All Entries</button>
+          <button type="button" data-menu-action="import-backup"><span class="menu-icon import-backup-icon" aria-hidden="true"></span>Import Backup</button>
+          <button type="button" data-menu-action="import-csv"><span class="menu-icon import-csv-icon" aria-hidden="true"></span>Import CSV File</button>
+          <button type="button" data-menu-action="export-backup"><span class="menu-icon export-backup-icon" aria-hidden="true"></span>Export Backup</button>
+          <button type="button" data-menu-action="export-csv"><span class="menu-icon export-csv-icon" aria-hidden="true"></span>Export CSV Report</button>
+          <button type="button" data-menu-action="export-pdf"><span class="menu-icon export-pdf-icon" aria-hidden="true"></span>Export PDF Report</button>
+          <hr class="menu-separator">
+          <button type="button" data-menu-action="archive"><span class="menu-icon archive-icon" aria-hidden="true"></span>Archive</button>
+          <button type="button" data-menu-action="categories"><span class="menu-icon category-icon" aria-hidden="true"></span>Categories</button>
+          <button type="button" data-menu-action="aircraft"><span class="menu-icon aircraft-icon" aria-hidden="true"></span>Aircraft</button>
+          <button type="button" data-menu-action="trips"><span class="menu-icon trip-icon" aria-hidden="true"></span>Trips</button>
+          <button class="danger-menu-item" type="button" data-menu-action="clear"><span class="menu-icon clear-icon" aria-hidden="true"></span>Delete All Entries</button>
         </div>
       </div>
     </header>

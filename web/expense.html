@@ -14,34 +14,24 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="page-shell form-page">
-    <div class="backdrop backdrop-a"></div>
-    <div class="backdrop backdrop-b"></div>
-
-    <header class="form-shell card">
-      <a class="inline-button back-link" id="back-link" href="index.html?view=to-submit">Back</a>
-      <div class="form-header">
-        <div>
-          <div class="brand-lockup brand-lockup-compact">
-            <div class="brand-logo-frame">
-              <img class="brand-logo" src="assets/prismjet-logo.svg" alt="PrismJet">
-            </div>
-          </div>
-          <p class="eyebrow" id="form-eyebrow">PrismJet expense entry</p>
-          <h1 id="form-title">New Expense</h1>
-          <p class="back-copy" id="form-copy">Snap the receipt, let OCR suggest the basics, then save.</p>
-        </div>
-      </div>
+  <div class="page-shell form-page native-editor-page">
+    <header class="native-editor-toolbar" aria-label="Entry editor">
+      <a class="native-toolbar-pill" id="back-link" href="index.html?view=to-submit">Cancel</a>
+      <h1 id="form-title">New</h1>
+      <button class="native-toolbar-pill" id="save-button" form="expense-form" type="submit">Save</button>
+      <a id="cancel-link" href="index.html?view=to-submit" hidden>Cancel</a>
+      <p id="form-eyebrow" hidden>PrismJet expense entry</p>
+      <p id="form-copy" hidden>Snap the receipt, let OCR suggest the basics, then save.</p>
     </header>
 
-    <section class="card form-card">
-      <form id="expense-form" novalidate>
+    <form id="expense-form" class="native-editor-stack" novalidate>
         <input id="expense-id" type="hidden">
         <input id="existing-photo" type="hidden">
         <datalist id="trip-number-options"></datalist>
         <datalist id="aircraft-options"></datalist>
 
-        <fieldset class="entry-type-picker">
+        <section class="native-editor-card native-file-card">
+        <fieldset class="entry-type-picker native-segmented-picker">
           <legend>Entry type</legend>
           <label class="entry-type-option">
             <input id="record-type-expense" name="recordType" type="radio" value="expense" checked>
@@ -53,33 +43,33 @@
           </label>
         </fieldset>
 
-        <div class="field-grid entry-grid">
-          <label class="field field-wide receipt-field">
-            <span>Receipt photo</span>
-            <input id="photo" name="photo" type="file" accept="image/*">
+          <label class="field field-wide receipt-field native-receipt-field">
+            <span class="visually-hidden">Receipt photo</span>
+            <input id="photo" name="photo" type="file" accept="image/*,.pdf,application/pdf">
             <div class="receipt-actions">
               <button class="secondary-button compact-action" id="autofill-button" type="button" disabled hidden>Auto-Fill from Receipt</button>
               <p class="scan-status" id="scan-status">Choose a receipt photo to scan amount, vendor, category, and date.</p>
             </div>
-            <small class="field-help">This OCR runs in the browser, so there is no API charge. It prefers the final total when a tip line is present and works best with a clear, straight-on receipt photo.</small>
+          </label>
+        </section>
+
+        <section class="native-editor-card native-fields-card">
+          <label class="field field-wide native-row">
+            <span class="visually-hidden">Vendor</span>
+            <input id="merchant" name="merchant" type="text" maxlength="80" placeholder="Vendor" required>
           </label>
 
-          <label class="field">
-            <span>Amount</span>
+          <label class="field field-wide native-row">
+            <span class="visually-hidden">Amount</span>
             <input id="amount" name="amount" type="text" inputmode="numeric" autocomplete="off" placeholder="$0.00" required>
           </label>
 
-          <label class="field">
+          <label class="field field-wide native-row native-date-row">
             <span id="date-label">Expense date</span>
             <input id="date" name="date" type="date" required>
           </label>
 
-          <label class="field field-wide">
-            <span>Vendor</span>
-            <input id="merchant" name="merchant" type="text" maxlength="80" placeholder="Restaurant, hotel, airline, rideshare" required>
-          </label>
-
-          <label class="field">
+          <label class="field field-wide native-row native-select-row">
             <span>Category</span>
             <select id="category" name="category" required>
               <option value="">Select category</option>
@@ -92,11 +82,11 @@
             </select>
           </label>
 
-          <label class="field">
-            <span>Trip #</span>
-            <input id="trip-number" name="tripNumber" type="text" maxlength="40" placeholder="12345 or PHX-0426" list="trip-number-options">
+          <label class="field field-wide native-row native-select-row">
+            <span>Trip</span>
+            <input id="trip-number" name="tripNumber" type="text" maxlength="40" placeholder="No trip" list="trip-number-options">
           </label>
-        </div>
+        </section>
 
         <div class="photo-preview" id="photo-preview" hidden>
           <div class="photo-preview-actions">
@@ -106,25 +96,25 @@
           <img id="photo-preview-image" alt="Receipt preview">
         </div>
 
-        <details class="details-panel" id="optional-details" open>
-          <summary>More details</summary>
+        <details class="native-editor-card details-panel native-details-card" id="optional-details" open>
+          <summary>Airport</summary>
           <div class="field-grid optional-grid">
-            <label class="field field-wide">
-              <span>Airport</span>
+            <label class="field field-wide native-row">
+              <span class="visually-hidden">Airport</span>
               <div class="location-row">
-                <input id="location" name="location" type="text" maxlength="120" placeholder="PHX, TEB, SDL, client site">
+                <input id="location" name="location" type="text" maxlength="120" placeholder="Airport">
                 <button class="inline-button" id="use-location-button" type="button">Use GPS</button>
               </div>
             </label>
 
-            <label class="field field-wide">
+            <label class="field field-wide native-row native-select-row">
               <span>Aircraft</span>
               <input id="aircraft" name="aircraft" type="text" maxlength="40" placeholder="N123PJ" list="aircraft-options">
             </label>
 
-            <label class="field field-wide">
-              <span>Notes</span>
-              <textarea id="notes" name="notes" rows="3" maxlength="400" placeholder="Who it was for, project code, or anything your approval process needs"></textarea>
+            <label class="field field-wide native-row native-notes-row">
+              <span class="visually-hidden">Notes</span>
+              <textarea id="notes" name="notes" rows="3" maxlength="400" placeholder="Notes"></textarea>
             </label>
 
             <label class="field status-date-field" id="submitted-date-field" hidden>
@@ -138,13 +128,7 @@
             </label>
           </div>
         </details>
-
-        <div class="form-actions">
-          <button class="primary-button" id="save-button" type="submit">Save Expense</button>
-          <a class="secondary-button" id="cancel-link" href="index.html?view=to-submit">Cancel</a>
-        </div>
-      </form>
-    </section>
+    </form>
   </div>
 
   <div class="image-modal" id="image-modal" hidden>

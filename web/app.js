@@ -3,18 +3,24 @@ import {
   clearAllExpenses,
   createId,
   deleteExpense,
+  extractImportedExpenseRecords,
   filterExpenses,
   formatCount,
   formatCurrency,
   formatDate,
   getAllExpenses,
+  getAircraftOptions,
+  getCategoryOptions,
   getExpense,
   getQuickStatusLabel,
+  getSavedOptionSettings,
   getStatusBadgeClass,
   getStatusLabel,
   getToday,
+  getTripOptions,
   getViewConfig,
   normalizeImportedExpense,
+  saveOptionSettings,
   saveExpense,
   sortExpenses,
   summarizeExpenses,
@@ -26,6 +32,7 @@ const state = {
   currentRecordType: getInitialRecordType(),
   currentGrouping: getInitialGrouping(),
   expenses: [],
+  importMode: "any",
 };
 
 const elements = {
@@ -1292,29 +1299,176 @@ function handleMenuAction(event) {
   elements.menuPopover.hidden = true;
   elements.menuButton.setAttribute("aria-expanded", "false");
 
-  if (action === "import") {
+  if (action === "import-backup") {
+    state.importMode = "backup";
+    elements.importInput.accept = ".json,application/json";
+    elements.importInput.click();
+  } else if (action === "import-csv") {
+    state.importMode = "csv";
+    elements.importInput.accept = ".csv,text/csv";
     elements.importInput.click();
   } else if (action === "export-backup") {
     exportExpenses();
+  } else if (action === "export-csv") {
+    exportCsvReport();
+  } else if (action === "export-pdf") {
+    exportPdfReport();
   } else if (action === "clear") {
     clearAllEntries();
   } else if (action === "archive") {
     const archivedCount = state.expenses.filter((expense) => expense.archivedAt).length;
     window.alert(archivedCount ? `${archivedCount} archived entries are saved and included in backup exports.` : "No archived entries yet.");
+  } else if (action === "categories") {
+    manageOptions("category");
+  } else if (action === "aircraft") {
+    manageOptions("aircraft");
+  } else if (action === "trips") {
+    manageOptions("trip");
   }
 }
 
 function exportExpenses() {
   const payload = buildExportPayload(state.expenses);
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  downloadBlob(blob, `expenses-manual-backup-${getToday()}.json`);
+}
+
+function exportCsvReport() {
+  const rows = buildCsvReportRows(state.expenses);
+  const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  downloadBlob(blob, `expenses-report-${getToday()}.csv`);
+}
+
+function exportPdfReport() {
+  const rows = state.expenses;
+  const total = rows.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const reportWindow = window.open("", "_blank");
+
+  if (!reportWindow) {
+    window.alert("Your browser blocked the PDF report window. Allow pop-ups for this site and try again.");
+    return;
+  }
+
+  reportWindow.document.write(buildPrintableReportHtml(rows, total));
+  reportWindow.document.close();
+  reportWindow.focus();
+  reportWindow.setTimeout(() => reportWindow.print(), 250);
+}
+
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `expenses-manual-backup-${getToday()}.json`;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function buildCsvReportRows(expenses) {
+  const header = [
+    "Type",
+    "Status",
+    "Expected payout date",
+    "Amount",
+    "Vendor",
+    "Category",
+    "Trip #",
+    "Expense date",
+    "Submitted date",
+    "Paid date",
+    "Archived date",
+    "Airport",
+    "Aircraft",
+    "Notes",
+  ];
+
+  const rows = sortExpenses(expenses).map((expense) => {
+    const recordType = getRecordType(expense);
+    return [
+      recordType === "incentive" ? "Incentive" : "Expense",
+      getStatusLabel(expense),
+      expense.submittedDate ? getExpectedPayoutDate(expense, recordType) : "",
+      Number(expense.amount || 0).toFixed(2),
+      expense.merchant || "",
+      expense.category || "",
+      expense.tripNumber || "",
+      expense.date || "",
+      expense.submittedDate || "",
+      expense.reimbursedDate || "",
+      expense.archivedAt || "",
+      expense.location || "",
+      expense.aircraft || "",
+      expense.notes || "",
+    ];
+  });
+
+  return [header, ...rows];
+}
+
+function csvEscape(value) {
+  const escaped = String(value ?? "").replace(/"/g, "\"\"");
+  return /[",\n\r]/.test(escaped) ? `"${escaped}"` : escaped;
+}
+
+function buildPrintableReportHtml(expenses, total) {
+  const generatedDate = formatDate(getToday());
+  const rows = sortExpenses(expenses)
+    .map((expense) => `
+      <tr>
+        <td>
+          <strong>${escapeHtml(expense.merchant || "Untitled entry")}</strong>
+          <span>${escapeHtml([expense.category, expense.location, expense.aircraft].filter(Boolean).join(" • "))}</span>
+        </td>
+        <td>${escapeHtml(formatDate(expense.date))}</td>
+        <td>${escapeHtml(getStatusLabel(expense))}</td>
+        <td class="amount">${escapeHtml(formatCurrency(expense.amount))}</td>
+      </tr>
+    `)
+    .join("");
+
+  return `<!doctype html>
+    <html>
+      <head>
+        <title>Expenses Report</title>
+        <style>
+          body { margin: 0; padding: 32px; color: #111; font-family: Avenir Next, Helvetica, Arial, sans-serif; background: #f7f0e6; }
+          .hero { border-radius: 24px; padding: 28px; color: white; background: linear-gradient(135deg, #050505, #251406); }
+          .eyebrow { margin: 0 0 8px; color: #e8be84; font-size: 12px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; }
+          h1 { margin: 0; font-family: Iowan Old Style, Palatino, serif; font-size: 42px; font-weight: 400; }
+          .summary { margin-top: 10px; color: rgba(255,255,255,.78); }
+          table { width: 100%; margin-top: 24px; border-collapse: collapse; background: white; border-radius: 18px; overflow: hidden; }
+          th, td { padding: 14px 16px; border-bottom: 1px solid #eadfce; text-align: left; vertical-align: top; }
+          th { color: #6c6257; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; }
+          td span { display: block; margin-top: 4px; color: #6c6257; font-size: 12px; }
+          .amount { color: #ee7100; font-weight: 800; text-align: right; white-space: nowrap; }
+          @media print { body { background: white; padding: 0; } .hero { break-inside: avoid; } }
+        </style>
+      </head>
+      <body>
+        <section class="hero">
+          <p class="eyebrow">PrismJet</p>
+          <h1>Expenses Report</h1>
+          <div class="summary">${expenses.length} ${expenses.length === 1 ? "entry" : "entries"} • ${escapeHtml(formatCurrency(total))} • Generated ${escapeHtml(generatedDate)}</div>
+        </section>
+        <table>
+          <thead>
+            <tr><th>Entry</th><th>Date</th><th>Status</th><th class="amount">Amount</th></tr>
+          </thead>
+          <tbody>${rows || "<tr><td colspan=\"4\">No entries to export.</td></tr>"}</tbody>
+        </table>
+      </body>
+    </html>`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 async function clearAllEntries() {
@@ -1351,6 +1505,55 @@ async function clearAllEntries() {
   }
 }
 
+function manageOptions(kind) {
+  const config = {
+    category: {
+      title: "Categories",
+      key: "categoryOptions",
+      values: getCategoryOptions(state.expenses),
+      hint: "These only change the pick-list for new entries. Saved entries keep their existing category names.",
+    },
+    aircraft: {
+      title: "Aircraft",
+      key: "aircraftOptions",
+      values: getAircraftOptions(state.expenses),
+      hint: "These feed the Aircraft menu without changing saved entries.",
+    },
+    trip: {
+      title: "Trips",
+      key: "tripOptions",
+      values: getTripOptions(state.expenses),
+      hint: "Only the most recent 10 trips are shown in the entry form.",
+    },
+  }[kind];
+
+  if (!config) {
+    return;
+  }
+
+  const response = window.prompt(
+    `${config.title}\n\n${config.hint}\n\nEdit the comma-separated menu options:`,
+    config.values.join(", ")
+  );
+
+  if (response === null) {
+    return;
+  }
+
+  const settings = getSavedOptionSettings();
+  settings[config.key] = response
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (kind === "trip") {
+    settings[config.key] = settings[config.key].slice(0, 10);
+  }
+
+  saveOptionSettings(settings);
+  window.alert(`${config.title} menu options have been saved for future entries.`);
+}
+
 async function importExpenses(event) {
   const [file] = event.target.files || [];
   if (!file) {
@@ -1359,11 +1562,11 @@ async function importExpenses(event) {
 
   try {
     const text = await file.text();
-    if (isCsvExpenseImport(file, text)) {
+    if (state.importMode === "csv" || isCsvExpenseImport(file, text)) {
       const importedExpenses = parseCsvExpenseImport(text);
 
       if (!importedExpenses.length) {
-        window.alert("That CSV file did not contain any expenses I could import.");
+        window.alert("That CSV file did not contain any entries I could import.");
         return;
       }
 
@@ -1372,30 +1575,57 @@ async function importExpenses(event) {
       }
 
       await refreshExpenses();
-      window.alert(`Imported or updated ${importedExpenses.length} expenses from CSV.`);
+      window.alert(`Imported or updated ${formatCount(importedExpenses.length)} from CSV.`);
       return;
     }
 
     const parsed = JSON.parse(text);
-    const importedExpenses = Array.isArray(parsed.expenses) ? parsed.expenses : [];
+    const importedExpenses = extractImportedExpenseRecords(parsed);
 
     if (!importedExpenses.length) {
-      window.alert("That backup file did not contain any expenses.");
+      window.alert("That backup file did not contain any entries.");
       return;
     }
+
+    mergeImportedSettings(parsed);
 
     for (const rawExpense of importedExpenses) {
       await saveExpense(normalizeImportedExpense(rawExpense, createId));
     }
 
     await refreshExpenses();
-    window.alert(`Imported ${importedExpenses.length} expenses.`);
+    window.alert(`Imported ${formatCount(importedExpenses.length)}.`);
   } catch (error) {
     console.error(error);
     window.alert("Expenses could not import that file. Use an Expenses JSON backup or an accounting CSV export.");
   } finally {
+    state.importMode = "any";
+    elements.importInput.accept = ".json,application/json,.csv,text/csv";
     elements.importInput.value = "";
   }
+}
+
+function mergeImportedSettings(payload) {
+  const incoming = payload?.settings || payload?.options || {};
+  if (!incoming || typeof incoming !== "object") {
+    return;
+  }
+
+  const existing = getSavedOptionSettings();
+  saveOptionSettings({
+    categoryOptions: [
+      ...existing.categoryOptions,
+      ...(incoming.categoryOptions || incoming.categories || []),
+    ],
+    aircraftOptions: [
+      ...existing.aircraftOptions,
+      ...(incoming.aircraftOptions || incoming.aircraft || []),
+    ],
+    tripOptions: [
+      ...existing.tripOptions,
+      ...(incoming.tripOptions || incoming.trips || []),
+    ],
+  });
 }
 
 function isCsvExpenseImport(file, text) {

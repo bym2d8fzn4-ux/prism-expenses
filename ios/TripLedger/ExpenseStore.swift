@@ -577,12 +577,125 @@ struct BackupPayload: Codable {
     }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        app = try container.decodeIfPresent(String.self, forKey: .app) ?? "Expenses"
-        exportedAt = try container.decodeIfPresent(Date.self, forKey: .exportedAt) ?? .now
-        expenses = try container.decodeIfPresent([ExpenseRecord].self, forKey: .expenses) ?? []
-        settings = try container.decodeIfPresent(AppSettings.self, forKey: .settings) ?? .default
+        if let records = try? decoder.singleValueContainer().decode([ExpenseRecord].self) {
+            app = "Expenses"
+            exportedAt = .now
+            expenses = records
+            settings = .default
+            return
+        }
+
+        let container = try decoder.container(keyedBy: FlexibleCodingKey.self)
+        app = Self.decodeString(from: container, keys: ["app", "name"]).ifEmpty("Expenses")
+        exportedAt = Self.decodeDate(from: container, keys: ["exportedAt", "createdAt"]) ?? .now
+        expenses = Self.decodeRecords(from: container)
+
+        let nestedSettings =
+            Self.decodeSettings(from: container, keys: ["settings", "options"]) ?? .default
+        let rootSettings = AppSettings(
+            categoryOptions: Self.decodeStringArray(from: container, keys: ["categoryOptions", "categories"]),
+            aircraftOptions: Self.decodeStringArray(from: container, keys: ["aircraftOptions", "aircraft"]),
+            tripOptions: Self.decodeStringArray(from: container, keys: ["tripOptions", "trips"])
+        )
+        settings = nestedSettings.merging(rootSettings)
     }
+
+    private static func decodeRecords(from container: KeyedDecodingContainer<FlexibleCodingKey>) -> [ExpenseRecord] {
+        for keyName in ["expenses", "records", "entries", "items"] {
+            guard let key = FlexibleCodingKey(stringValue: keyName) else {
+                continue
+            }
+
+            if let records = try? container.decode([ExpenseRecord].self, forKey: key) {
+                return records
+            }
+        }
+
+        return []
+    }
+
+    private static func decodeSettings(
+        from container: KeyedDecodingContainer<FlexibleCodingKey>,
+        keys: [String]
+    ) -> AppSettings? {
+        for keyName in keys {
+            guard let key = FlexibleCodingKey(stringValue: keyName) else {
+                continue
+            }
+
+            if let settings = try? container.decode(AppSettings.self, forKey: key) {
+                return settings
+            }
+        }
+
+        return nil
+    }
+
+    private static func decodeString(
+        from container: KeyedDecodingContainer<FlexibleCodingKey>,
+        keys: [String]
+    ) -> String {
+        for keyName in keys {
+            guard let key = FlexibleCodingKey(stringValue: keyName) else {
+                continue
+            }
+
+            if let value = try? container.decode(String.self, forKey: key) {
+                return value.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        return ""
+    }
+
+    private static func decodeDate(
+        from container: KeyedDecodingContainer<FlexibleCodingKey>,
+        keys: [String]
+    ) -> Date? {
+        for keyName in keys {
+            guard let key = FlexibleCodingKey(stringValue: keyName) else {
+                continue
+            }
+
+            if let date = try? container.decode(Date.self, forKey: key) {
+                return date
+            }
+
+            if let string = try? container.decode(String.self, forKey: key) {
+                let value = string.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let date = ISO8601DateFormatter().date(from: value) ?? dayFormatter.date(from: value) {
+                    return date
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private static func decodeStringArray(
+        from container: KeyedDecodingContainer<FlexibleCodingKey>,
+        keys: [String]
+    ) -> [String] {
+        for keyName in keys {
+            guard let key = FlexibleCodingKey(stringValue: keyName) else {
+                continue
+            }
+
+            if let values = try? container.decode([String].self, forKey: key) {
+                return values
+            }
+        }
+
+        return []
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 }
 
 private extension AppSettings {

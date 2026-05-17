@@ -1,5 +1,20 @@
 import Foundation
 
+struct FlexibleCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        intValue = nil
+    }
+
+    init?(intValue: Int) {
+        stringValue = String(intValue)
+        self.intValue = intValue
+    }
+}
+
 enum RecordType: String, Codable, CaseIterable, Identifiable {
     case expense
     case incentive
@@ -191,77 +206,188 @@ struct ExpenseRecord: Codable, Identifiable, Equatable {
     }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let container = try decoder.container(keyedBy: FlexibleCodingKey.self)
         id = Self.decodeID(from: container)
-        recordType = try container.decodeIfPresent(RecordType.self, forKey: .recordType) ?? .expense
-        amount = Self.decodeDouble(from: container, forKey: .amount) ?? 0
-        merchant = try container.decodeIfPresent(String.self, forKey: .merchant) ?? ""
-        category = try container.decodeIfPresent(String.self, forKey: .category) ?? ExpenseCategory.miscellaneous.rawValue
-        tripNumber = try container.decodeIfPresent(String.self, forKey: .tripNumber) ?? ""
-        date = Self.decodeDate(from: container, forKey: .date) ?? .now
-        location = try container.decodeIfPresent(String.self, forKey: .location) ?? ""
-        aircraft = try container.decodeIfPresent(String.self, forKey: .aircraft) ?? ""
-        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
-        submittedDate = Self.decodeDate(from: container, forKey: .submittedDate)
-        reimbursedDate = Self.decodeDate(from: container, forKey: .reimbursedDate)
-        archivedAt = Self.decodeDate(from: container, forKey: .archivedAt)
-        receiptImageFilename = try container.decodeIfPresent(String.self, forKey: .receiptImageFilename)
-        legacyPhotoDataURL = try container.decodeIfPresent(String.self, forKey: .legacyPhotoDataURL)
-        createdAt = Self.decodeDate(from: container, forKey: .createdAt) ?? .now
-        updatedAt = Self.decodeDate(from: container, forKey: .updatedAt) ?? createdAt
+        recordType = Self.decodeRecordType(from: container)
+        amount = Self.decodeDouble(
+            from: container,
+            keys: ["amount", "totalAmount", "total", "finalTotal", "reimbursementAmount"],
+            centKeys: ["amountCents", "totalCents"]
+        ) ?? 0
+        merchant = Self.decodeString(from: container, keys: ["merchant", "vendor", "displayMerchant", "name", "title", "description"])
+        category = Self.decodeString(from: container, keys: ["category", "categoryName"]).ifEmpty(ExpenseCategory.miscellaneous.rawValue)
+        tripNumber = Self.decodeString(from: container, keys: ["tripNumber", "trip", "tripName", "tripId", "tripNo", "tripNumberValue"])
+        date = Self.decodeDate(
+            from: container,
+            keys: ["date", "expenseDate", "incentiveDate", "transactionDate", "recordDate"]
+        ) ?? Self.decodeDate(
+            from: container,
+            keys: ["submittedDate", "dateSubmitted", "submittedAt", "submissionDate"]
+        ) ?? Self.decodeDate(
+            from: container,
+            keys: ["reimbursedDate", "paidDate", "datePaid", "reimbursedAt", "reimbursementDate"]
+        ) ?? .now
+        location = Self.decodeString(from: container, keys: ["location", "airport", "airportCode"])
+        aircraft = Self.decodeString(from: container, keys: ["aircraft", "tail", "tailNumber", "tailNumberValue"]).uppercased()
+        notes = Self.decodeString(from: container, keys: ["notes", "memo", "comment", "comments"])
+        submittedDate = Self.decodeDate(from: container, keys: ["submittedDate", "dateSubmitted", "submittedAt", "submissionDate", "submitted"])
+        reimbursedDate = Self.decodeDate(from: container, keys: ["reimbursedDate", "paidDate", "datePaid", "reimbursedAt", "reimbursementDate", "paid"])
+        archivedAt = Self.decodeDate(from: container, keys: ["archivedAt", "archivedDate", "archiveDate"])
+        receiptImageFilename = Self.decodeString(from: container, keys: ["receiptImageFilename"]).nilIfEmpty
+        legacyPhotoDataURL = Self.decodeString(
+            from: container,
+            keys: ["photoDataUrl", "legacyPhotoDataURL", "receiptImageDataUrl", "receiptPhotoDataUrl"]
+        ).nilIfEmpty
+        createdAt = Self.decodeDate(from: container, keys: ["createdAt", "createdDate"]) ?? .now
+        updatedAt = Self.decodeDate(from: container, keys: ["updatedAt", "updatedDate", "modifiedAt"]) ?? createdAt
     }
 
-    private static func decodeID(from container: KeyedDecodingContainer<CodingKeys>) -> UUID {
-        if let id = try? container.decode(UUID.self, forKey: .id) {
+    private static func decodeID(from container: KeyedDecodingContainer<FlexibleCodingKey>) -> UUID {
+        guard let key = FlexibleCodingKey(stringValue: "id") else {
+            return UUID()
+        }
+
+        if let id = try? container.decode(UUID.self, forKey: key) {
             return id
         }
 
-        if let idString = try? container.decode(String.self, forKey: .id),
-           let id = UUID(uuidString: idString) {
-            return id
+        if let idString = try? container.decode(String.self, forKey: key) {
+            if let id = UUID(uuidString: idString) {
+                return id
+            }
+
+            if !idString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return deterministicID(from: idString)
+            }
         }
 
         return UUID()
     }
 
+    private static func decodeRecordType(from container: KeyedDecodingContainer<FlexibleCodingKey>) -> RecordType {
+        let value = decodeString(from: container, keys: ["recordType", "type", "entryType", "kind"])
+        return value.localizedCaseInsensitiveContains("incentive") ? .incentive : .expense
+    }
+
     private static func decodeDouble(
-        from container: KeyedDecodingContainer<CodingKeys>,
-        forKey key: CodingKeys
+        from container: KeyedDecodingContainer<FlexibleCodingKey>,
+        keys: [String],
+        centKeys: [String] = []
     ) -> Double? {
-        if let value = try? container.decode(Double.self, forKey: key) {
-            return value
+        if let cents = decodeNumeric(from: container, keys: centKeys) {
+            return cents / 100
         }
 
-        if let value = try? container.decode(String.self, forKey: key) {
-            let cleaned = value.replacingOccurrences(of: #"[^0-9.-]"#, with: "", options: .regularExpression)
-            return Double(cleaned)
+        return decodeNumeric(from: container, keys: keys)
+    }
+
+    private static func decodeDate(
+        from container: KeyedDecodingContainer<FlexibleCodingKey>,
+        keys: [String]
+    ) -> Date? {
+        for keyName in keys {
+            guard let key = FlexibleCodingKey(stringValue: keyName) else {
+                continue
+            }
+
+            if let date = try? container.decode(Date.self, forKey: key) {
+                return Calendar.current.startOfDay(for: date)
+            }
+
+            if let numericValue = try? container.decode(Double.self, forKey: key) {
+                let seconds = numericValue > 10_000_000_000 ? numericValue / 1000 : numericValue
+                return Calendar.current.startOfDay(for: Date(timeIntervalSince1970: seconds))
+            }
+
+            guard let rawValue = try? container.decode(String.self, forKey: key) else {
+                continue
+            }
+
+            let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else {
+                continue
+            }
+
+            if let date = isoFormatter.date(from: value) ?? fractionalISOFormatter.date(from: value) {
+                return Calendar.current.startOfDay(for: date)
+            }
+
+            if let date = dayFormatters.compactMap({ $0.date(from: value) }).first {
+                return date
+            }
         }
 
         return nil
     }
 
-    private static func decodeDate(
-        from container: KeyedDecodingContainer<CodingKeys>,
-        forKey key: CodingKeys
-    ) -> Date? {
-        if let date = try? container.decode(Date.self, forKey: key) {
-            return date
+    private static func decodeString(from container: KeyedDecodingContainer<FlexibleCodingKey>, keys: [String]) -> String {
+        for keyName in keys {
+            guard let key = FlexibleCodingKey(stringValue: keyName) else {
+                continue
+            }
+
+            if let value = try? container.decode(String.self, forKey: key) {
+                return value.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            if let value = try? container.decode(Double.self, forKey: key) {
+                return String(value)
+            }
+
+            if let value = try? container.decode(Int.self, forKey: key) {
+                return String(value)
+            }
         }
 
-        guard let rawValue = try? container.decode(String.self, forKey: key) else {
-            return nil
+        return ""
+    }
+
+    private static func decodeNumeric(from container: KeyedDecodingContainer<FlexibleCodingKey>, keys: [String]) -> Double? {
+        for keyName in keys {
+            guard let key = FlexibleCodingKey(stringValue: keyName) else {
+                continue
+            }
+
+            if let value = try? container.decode(Double.self, forKey: key) {
+                return value
+            }
+
+            if let value = try? container.decode(Int.self, forKey: key) {
+                return Double(value)
+            }
+
+            if let value = try? container.decode(String.self, forKey: key) {
+                let cleaned = value.replacingOccurrences(of: #"[^0-9.-]"#, with: "", options: .regularExpression)
+                if let parsed = Double(cleaned) {
+                    return parsed
+                }
+            }
         }
 
-        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else {
-            return nil
+        return nil
+    }
+
+    private static func deterministicID(from value: String) -> UUID {
+        func fnvHash(seed: UInt64, bytes: [UInt8]) -> UInt64 {
+            bytes.reduce(seed) { partial, byte in
+                (partial ^ UInt64(byte)) &* 1_099_511_628_211
+            }
         }
 
-        if let date = isoFormatter.date(from: value) ?? fractionalISOFormatter.date(from: value) {
-            return date
-        }
+        let bytes = Array(value.utf8)
+        let first = fnvHash(seed: 14_695_981_039_346_656_037, bytes: bytes)
+        let second = fnvHash(seed: 7_803_522_088_215_333_221, bytes: Array(bytes.reversed()))
+        var uuidBytes = (0..<8).map { UInt8((first >> ((7 - $0) * 8)) & 0xff) }
+        uuidBytes.append(contentsOf: (0..<8).map { UInt8((second >> ((7 - $0) * 8)) & 0xff) })
+        uuidBytes[6] = (uuidBytes[6] & 0x0f) | 0x50
+        uuidBytes[8] = (uuidBytes[8] & 0x3f) | 0x80
 
-        return dayFormatter.date(from: value)
+        return UUID(uuid: (
+            uuidBytes[0], uuidBytes[1], uuidBytes[2], uuidBytes[3],
+            uuidBytes[4], uuidBytes[5], uuidBytes[6], uuidBytes[7],
+            uuidBytes[8], uuidBytes[9], uuidBytes[10], uuidBytes[11],
+            uuidBytes[12], uuidBytes[13], uuidBytes[14], uuidBytes[15]
+        ))
     }
 
     private static let isoFormatter: ISO8601DateFormatter = {
@@ -276,13 +402,15 @@ struct ExpenseRecord: Codable, Identifiable, Equatable {
         return formatter
     }()
 
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
+    private static let dayFormatters: [DateFormatter] = {
+        ["yyyy-MM-dd", "M/d/yy", "M/d/yyyy", "M-d-yy", "M-d-yyyy", "MMM d, yyyy", "MMMM d, yyyy"].map { pattern in
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = .current
+            formatter.dateFormat = pattern
+            return formatter
+        }
     }()
 
     var status: LedgerStatus {
@@ -338,10 +466,28 @@ struct AppSettings: Codable, Equatable {
     }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        categoryOptions = try container.decodeIfPresent([String].self, forKey: .categoryOptions) ?? ExpenseCategory.defaultOptions
-        aircraftOptions = try container.decodeIfPresent([String].self, forKey: .aircraftOptions) ?? []
-        tripOptions = try container.decodeIfPresent([String].self, forKey: .tripOptions) ?? []
+        let container = try decoder.container(keyedBy: FlexibleCodingKey.self)
+        let decodedCategories = Self.decodeStringArray(from: container, keys: ["categoryOptions", "categories"])
+        categoryOptions = decodedCategories.isEmpty ? ExpenseCategory.defaultOptions : decodedCategories
+        aircraftOptions = Self.decodeStringArray(from: container, keys: ["aircraftOptions", "aircraft"])
+        tripOptions = Self.decodeStringArray(from: container, keys: ["tripOptions", "trips"])
+    }
+
+    private static func decodeStringArray(
+        from container: KeyedDecodingContainer<FlexibleCodingKey>,
+        keys: [String]
+    ) -> [String] {
+        for keyName in keys {
+            guard let key = FlexibleCodingKey(stringValue: keyName) else {
+                continue
+            }
+
+            if let values = try? container.decode([String].self, forKey: key) {
+                return values
+            }
+        }
+
+        return []
     }
 }
 
@@ -435,5 +581,15 @@ extension Calendar {
 extension ExpenseCategory {
     static var defaultOptions: [String] {
         allCases.map(\.rawValue)
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
+
+    func ifEmpty(_ fallback: String) -> String {
+        isEmpty ? fallback : self
     }
 }

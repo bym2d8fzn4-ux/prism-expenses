@@ -2,9 +2,12 @@ import {
   compressImage,
   createId,
   getAllExpenses,
+  getAircraftOptions,
+  getCategoryOptions,
   getExpense,
   getStatusKey,
   getToday,
+  getTripOptions,
   getViewConfig,
   saveExpense,
   validateDates,
@@ -89,6 +92,7 @@ if (document.readyState === "loading") {
 async function init() {
   bindEvents();
   setReturnLinks(returnView, returnRecordType);
+  await populateCategoryOptions();
   await populateTripNumberOptions();
   await populateAircraftOptions();
   elements.recordTypeExpense.checked = state.currentRecordType === "expense";
@@ -274,18 +278,14 @@ function applyRecordTypeUi(isEditing = Boolean(state.existingExpense)) {
     ? "PrismJet incentive entry"
     : "PrismJet expense entry";
   elements.formTitle.textContent = isEditing
-    ? isIncentive
-      ? "Edit Incentive"
-      : "Edit Expense"
-    : isIncentive
-      ? "New Incentive"
-      : "New Expense";
+    ? "Edit"
+    : "New";
   elements.formCopy.textContent = isEditing
     ? "Update the details, then save to return to your dashboard."
     : isIncentive
       ? "Enter the incentive details, then track the monthly 15th payout date."
       : "Snap the receipt, let OCR suggest the basics, then save.";
-  elements.saveButton.textContent = isIncentive ? "Save Incentive" : "Save Expense";
+  elements.saveButton.textContent = "Save";
   elements.dateLabel.textContent = isIncentive ? "Incentive date" : "Expense date";
   updateStatusDateVisibility(isEditing);
 }
@@ -300,21 +300,10 @@ function updateStatusDateVisibility(isEditing = Boolean(state.existingExpense)) 
 async function populateTripNumberOptions() {
   try {
     const expenses = await getAllExpenses();
-    const sorted = [...expenses].sort((left, right) => {
-      const leftKey = left.updatedAt || left.createdAt || "";
-      const rightKey = right.updatedAt || right.createdAt || "";
-      return rightKey.localeCompare(leftKey);
-    });
-    const seen = new Set();
+    const tripNumbers = getTripOptions(expenses);
 
     elements.tripNumberOptions.replaceChildren();
-    sorted.forEach((expense) => {
-      const tripNumber = String(expense.tripNumber || "").trim();
-      if (!tripNumber || seen.has(tripNumber)) {
-        return;
-      }
-
-      seen.add(tripNumber);
+    tripNumbers.forEach((tripNumber) => {
       const option = document.createElement("option");
       option.value = tripNumber;
       elements.tripNumberOptions.appendChild(option);
@@ -327,16 +316,10 @@ async function populateTripNumberOptions() {
 async function populateAircraftOptions() {
   try {
     const expenses = await getAllExpenses();
-    const seen = new Set();
+    const aircraftOptions = getAircraftOptions(expenses);
 
     elements.aircraftOptions.replaceChildren();
-    expenses.forEach((expense) => {
-      const aircraft = String(expense.aircraft || "").trim().toUpperCase();
-      if (!aircraft || seen.has(aircraft)) {
-        return;
-      }
-
-      seen.add(aircraft);
+    aircraftOptions.forEach((aircraft) => {
       const option = document.createElement("option");
       option.value = aircraft;
       elements.aircraftOptions.appendChild(option);
@@ -346,6 +329,27 @@ async function populateAircraftOptions() {
   }
 }
 
+async function populateCategoryOptions() {
+  try {
+    const expenses = await getAllExpenses();
+    const currentValue = elements.category.value;
+    elements.category.replaceChildren(buildSelectOption("", "Select category"));
+    getCategoryOptions(expenses).forEach((category) => {
+      elements.category.appendChild(buildSelectOption(category, category));
+    });
+    elements.category.value = currentValue;
+  } catch (error) {
+    console.error("Could not load categories.", error);
+  }
+}
+
+function buildSelectOption(value, label) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  return option;
+}
+
 async function handlePhotoChange(event) {
   const [file] = event.target.files || [];
   if (!file) {
@@ -353,6 +357,14 @@ async function handlePhotoChange(event) {
   }
 
   try {
+    if (isPdfFile(file)) {
+      state.currentPhotoDataUrl = "";
+      renderPhotoPreview("");
+      setAutofillAvailability(false);
+      updateScanStatus("PDF selected. Browser OCR reads photos for now, so enter the details manually.");
+      return;
+    }
+
     state.currentPhotoDataUrl = await compressImage(file);
     renderPhotoPreview(state.currentPhotoDataUrl);
     setAutofillAvailability(true);
@@ -362,6 +374,10 @@ async function handlePhotoChange(event) {
     console.error(error);
     window.alert("That photo could not be processed. Please try another image.");
   }
+}
+
+function isPdfFile(file) {
+  return file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
 }
 
 function removePhoto() {
