@@ -29,6 +29,7 @@ import {
 } from "./storage.js";
 
 const EMPTY_REPORT_VALUE = "__empty__";
+const DAILY_BACKUP_STORAGE_KEY = "expenses.lastDailyBackupPrompt";
 const REPORT_TYPE_OPTIONS = [
   { value: "expense", label: "Expenses" },
   { value: "incentive", label: "Incentives" },
@@ -124,6 +125,10 @@ const elements = {
   optionList: document.querySelector("#option-list"),
   optionAddForm: document.querySelector("#option-add-form"),
   optionNewValue: document.querySelector("#option-new-value"),
+  backupReminderModal: document.querySelector("#backup-reminder-modal"),
+  backupReminderScrim: document.querySelector("#backup-reminder-scrim"),
+  backupReminderSkipButton: document.querySelector("#backup-reminder-skip-button"),
+  backupReminderDownloadButton: document.querySelector("#backup-reminder-download-button"),
 };
 
 if (document.readyState === "loading") {
@@ -136,6 +141,7 @@ async function init() {
   bindEvents();
   await refreshExpenses();
   updateStorageStatus();
+  maybeShowDailyBackupPrompt();
   registerServiceWorker();
 }
 
@@ -177,6 +183,9 @@ function bindEvents() {
   elements.optionCloseButton.addEventListener("click", closeOptionManager);
   elements.optionAddForm.addEventListener("submit", handleOptionAddSubmit);
   elements.optionList.addEventListener("click", handleOptionListClick);
+  elements.backupReminderScrim.addEventListener("click", dismissDailyBackupPrompt);
+  elements.backupReminderSkipButton.addEventListener("click", dismissDailyBackupPrompt);
+  elements.backupReminderDownloadButton.addEventListener("click", downloadDailyBackup);
   document.addEventListener("keydown", handleDocumentKeydown);
 }
 
@@ -1464,10 +1473,41 @@ function handleMenuAction(event) {
   }
 }
 
-function exportExpenses() {
+function exportExpenses(options = {}) {
+  const filenamePrefix = options.filenamePrefix || "expenses-manual-backup";
   const payload = buildExportPayload(state.expenses);
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  downloadBlob(blob, `expenses-manual-backup-${getToday()}.json`);
+  downloadBlob(blob, `${filenamePrefix}-${getToday()}.json`);
+  markDailyBackupPromptHandled();
+}
+
+function maybeShowDailyBackupPrompt() {
+  if (!state.expenses.length || window.localStorage.getItem(DAILY_BACKUP_STORAGE_KEY) === getToday()) {
+    return;
+  }
+
+  elements.backupReminderModal.hidden = false;
+  syncModalOpenState();
+  elements.backupReminderDownloadButton.focus({ preventScroll: true });
+}
+
+function markDailyBackupPromptHandled() {
+  window.localStorage.setItem(DAILY_BACKUP_STORAGE_KEY, getToday());
+}
+
+function closeDailyBackupPrompt() {
+  elements.backupReminderModal.hidden = true;
+  syncModalOpenState();
+}
+
+function dismissDailyBackupPrompt() {
+  markDailyBackupPromptHandled();
+  closeDailyBackupPrompt();
+}
+
+function downloadDailyBackup() {
+  exportExpenses({ filenamePrefix: "expenses-daily-backup" });
+  closeDailyBackupPrompt();
 }
 
 function openReportOptions(format) {
@@ -1495,11 +1535,14 @@ function handleDocumentKeydown(event) {
     closeReportOptions();
   } else if (!elements.optionModal.hidden) {
     closeOptionManager();
+  } else if (!elements.backupReminderModal.hidden) {
+    dismissDailyBackupPrompt();
   }
 }
 
 function syncModalOpenState() {
-  const isModalOpen = !elements.reportModal.hidden || !elements.optionModal.hidden;
+  const isModalOpen =
+    !elements.reportModal.hidden || !elements.optionModal.hidden || !elements.backupReminderModal.hidden;
   document.body.classList.toggle("modal-open", isModalOpen);
 }
 

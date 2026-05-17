@@ -210,6 +210,28 @@
     </section>
   </div>
 
+  <div class="report-modal" id="backup-reminder-modal" role="dialog" aria-modal="true" aria-labelledby="backup-reminder-title" hidden>
+    <div class="report-modal-scrim" id="backup-reminder-scrim"></div>
+    <section class="report-modal-card backup-reminder-card card" tabindex="-1">
+      <header class="report-modal-header">
+        <div>
+          <p class="eyebrow">Daily Backup</p>
+          <h2 id="backup-reminder-title">Create today's backup?</h2>
+          <p class="report-modal-copy">Download a backup file so your web app data has a separate copy outside the browser.</p>
+        </div>
+      </header>
+
+      <p class="backup-reminder-note">
+        Browsers cannot save this silently like the native iOS app, so this one-tap reminder appears once per day.
+      </p>
+
+      <div class="report-modal-actions">
+        <button class="inline-button" id="backup-reminder-skip-button" type="button">Not now</button>
+        <button class="primary-button" id="backup-reminder-download-button" type="button">Download Backup</button>
+      </div>
+    </section>
+  </div>
+
   <script src="app.js" type="module"></script>
 </body>
 </html>
