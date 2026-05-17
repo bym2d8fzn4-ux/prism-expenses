@@ -2456,6 +2456,25 @@ h2 {
   font-size: 0.98rem;
 }
 
+.native-fields-card > .native-row:not(.native-date-row):not(.native-select-row),
+.native-details-card .native-row:not(.native-date-row):not(.native-select-row):not(.native-notes-row) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  min-height: 52px;
+}
+
+.native-fields-card > .native-row:not(.native-date-row):not(.native-select-row) input,
+.native-details-card .native-row:not(.native-date-row):not(.native-select-row):not(.native-notes-row) input {
+  width: 100%;
+  justify-self: stretch;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  line-height: 44px;
+  text-align: left;
+}
+
 .native-date-row,
 .native-select-row {
   grid-template-columns: minmax(98px, auto) minmax(0, 1fr);
@@ -2464,6 +2483,20 @@ h2 {
 .native-date-row > span,
 .native-select-row > span {
   font-size: 0.98rem;
+}
+
+.native-date-row input[type="date"] {
+  align-self: center;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  line-height: 44px;
+}
+
+.native-date-row input[type="date"]::-webkit-date-and-time-value {
+  min-height: 44px;
+  line-height: 44px;
+  text-align: right;
 }
 
 .native-add-row {
