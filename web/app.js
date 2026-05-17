@@ -39,6 +39,37 @@ const REPORT_STATUS_OPTIONS = [
   { value: "reimbursed", label: "Paid" },
   { value: "archived", label: "Archived" },
 ];
+const OPTION_MANAGER_CONFIGS = {
+  category: {
+    title: "Categories",
+    key: "categoryOptions",
+    customKey: "categoryOptionsCustomized",
+    placeholder: "Add category",
+    hint: "These are only menu choices for future entries. Saved entries keep their existing category.",
+    getValues: () => getCategoryOptions(state.expenses),
+    normalize: (value) => value.trim(),
+  },
+  aircraft: {
+    title: "Aircraft",
+    key: "aircraftOptions",
+    customKey: "aircraftOptionsCustomized",
+    placeholder: "Add tail number",
+    hint: "These feed the Aircraft dropdown without changing saved entries.",
+    getValues: () => getAircraftOptions(state.expenses),
+    normalize: (value) => value.trim().toUpperCase(),
+  },
+  trip: {
+    title: "Trips",
+    key: "tripOptions",
+    customKey: "tripOptionsCustomized",
+    placeholder: "Add trip",
+    hint: "Only the most recent 10 trip names are shown when creating an entry.",
+    getValues: () => getTripOptions(state.expenses),
+    normalize: (value) => value.trim().toUpperCase(),
+    max: 10,
+    addToTop: true,
+  },
+};
 
 const state = {
   currentView: getInitialView(),
@@ -47,6 +78,7 @@ const state = {
   expenses: [],
   importMode: "any",
   pendingReportFormat: "csv",
+  optionManagerKind: "",
 };
 
 const elements = {
@@ -84,6 +116,14 @@ const elements = {
   reportAirportOptions: document.querySelector("#report-airport-options"),
   reportAircraftOptions: document.querySelector("#report-aircraft-options"),
   reportTripOptions: document.querySelector("#report-trip-options"),
+  optionModal: document.querySelector("#option-modal"),
+  optionModalScrim: document.querySelector("#option-modal-scrim"),
+  optionModalTitle: document.querySelector("#option-modal-title"),
+  optionModalCopy: document.querySelector("#option-modal-copy"),
+  optionCloseButton: document.querySelector("#option-close-button"),
+  optionList: document.querySelector("#option-list"),
+  optionAddForm: document.querySelector("#option-add-form"),
+  optionNewValue: document.querySelector("#option-new-value"),
 };
 
 if (document.readyState === "loading") {
@@ -133,6 +173,10 @@ function bindEvents() {
   elements.reportModalScrim.addEventListener("click", closeReportOptions);
   elements.reportCloseButton.addEventListener("click", closeReportOptions);
   elements.reportCancelButton.addEventListener("click", closeReportOptions);
+  elements.optionModalScrim.addEventListener("click", closeOptionManager);
+  elements.optionCloseButton.addEventListener("click", closeOptionManager);
+  elements.optionAddForm.addEventListener("submit", handleOptionAddSubmit);
+  elements.optionList.addEventListener("click", handleOptionListClick);
   document.addEventListener("keydown", handleDocumentKeydown);
 }
 
@@ -1433,19 +1477,30 @@ function openReportOptions(format) {
   populateReportOptions();
   updateReportPreview();
   elements.reportModal.hidden = false;
-  document.body.classList.add("modal-open");
-  elements.reportStartDate.focus();
+  syncModalOpenState();
+  elements.reportOptionsForm.focus({ preventScroll: true });
 }
 
 function closeReportOptions() {
   elements.reportModal.hidden = true;
-  document.body.classList.remove("modal-open");
+  syncModalOpenState();
 }
 
 function handleDocumentKeydown(event) {
-  if (event.key === "Escape" && !elements.reportModal.hidden) {
-    closeReportOptions();
+  if (event.key !== "Escape") {
+    return;
   }
+
+  if (!elements.reportModal.hidden) {
+    closeReportOptions();
+  } else if (!elements.optionModal.hidden) {
+    closeOptionManager();
+  }
+}
+
+function syncModalOpenState() {
+  const isModalOpen = !elements.reportModal.hidden || !elements.optionModal.hidden;
+  document.body.classList.toggle("modal-open", isModalOpen);
 }
 
 function populateReportOptions() {
@@ -1843,52 +1898,137 @@ async function clearAllEntries() {
 }
 
 function manageOptions(kind) {
-  const config = {
-    category: {
-      title: "Categories",
-      key: "categoryOptions",
-      values: getCategoryOptions(state.expenses),
-      hint: "These only change the pick-list for new entries. Saved entries keep their existing category names.",
-    },
-    aircraft: {
-      title: "Aircraft",
-      key: "aircraftOptions",
-      values: getAircraftOptions(state.expenses),
-      hint: "These feed the Aircraft menu without changing saved entries.",
-    },
-    trip: {
-      title: "Trips",
-      key: "tripOptions",
-      values: getTripOptions(state.expenses),
-      hint: "Only the most recent 10 trips are shown in the entry form.",
-    },
-  }[kind];
-
+  const config = getOptionManagerConfig(kind);
   if (!config) {
     return;
   }
 
-  const response = window.prompt(
-    `${config.title}\n\n${config.hint}\n\nEdit the comma-separated menu options:`,
-    config.values.join(", ")
-  );
+  state.optionManagerKind = kind;
+  elements.optionModalTitle.textContent = config.title;
+  elements.optionModalCopy.textContent = config.hint;
+  elements.optionNewValue.placeholder = config.placeholder;
+  elements.optionNewValue.value = "";
+  renderOptionManagerList();
+  elements.optionModal.hidden = false;
+  syncModalOpenState();
+}
 
-  if (response === null) {
+function closeOptionManager() {
+  elements.optionModal.hidden = true;
+  state.optionManagerKind = "";
+  syncModalOpenState();
+}
+
+function handleOptionAddSubmit(event) {
+  event.preventDefault();
+
+  const config = getOptionManagerConfig(state.optionManagerKind);
+  if (!config) {
     return;
   }
 
-  const settings = getSavedOptionSettings();
-  settings[config.key] = response
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  if (kind === "trip") {
-    settings[config.key] = settings[config.key].slice(0, 10);
+  const nextValue = config.normalize(elements.optionNewValue.value);
+  if (!nextValue) {
+    return;
   }
 
+  const currentValues = getOptionManagerValues(config);
+  if (currentValues.some((value) => valuesMatch(value, nextValue))) {
+    window.alert(`${nextValue} is already in ${config.title}.`);
+    return;
+  }
+
+  const nextValues = config.addToTop
+    ? [nextValue, ...currentValues]
+    : [...currentValues, nextValue];
+
+  saveOptionManagerValues(config, nextValues);
+  elements.optionNewValue.value = "";
+  renderOptionManagerList();
+}
+
+function handleOptionListClick(event) {
+  const deleteButton = event.target.closest("[data-option-delete]");
+  if (!deleteButton) {
+    return;
+  }
+
+  const config = getOptionManagerConfig(state.optionManagerKind);
+  if (!config) {
+    return;
+  }
+
+  const valueToDelete = deleteButton.dataset.optionDelete;
+  const nextValues = getOptionManagerValues(config).filter((value) => !valuesMatch(value, valueToDelete));
+  saveOptionManagerValues(config, nextValues);
+  renderOptionManagerList();
+}
+
+function renderOptionManagerList() {
+  const config = getOptionManagerConfig(state.optionManagerKind);
+  if (!config) {
+    return;
+  }
+
+  const values = getOptionManagerValues(config);
+  elements.optionList.replaceChildren();
+
+  if (!values.length) {
+    const empty = document.createElement("p");
+    empty.className = "option-empty-state";
+    empty.textContent = `No ${config.title.toLowerCase()} yet. Add one below.`;
+    elements.optionList.appendChild(empty);
+    return;
+  }
+
+  values.forEach((value) => {
+    const row = document.createElement("div");
+    const label = document.createElement("span");
+    const deleteButton = document.createElement("button");
+
+    row.className = "option-row";
+    label.textContent = value;
+    deleteButton.type = "button";
+    deleteButton.className = "option-delete-button";
+    deleteButton.dataset.optionDelete = value;
+    deleteButton.setAttribute("aria-label", `Delete ${value}`);
+    deleteButton.textContent = "-";
+    row.append(deleteButton, label);
+    elements.optionList.appendChild(row);
+  });
+}
+
+function getOptionManagerConfig(kind) {
+  return OPTION_MANAGER_CONFIGS[kind] || null;
+}
+
+function getOptionManagerValues(config) {
+  return uniqueOptionManagerValues(config.getValues().map((value) => config.normalize(value)), config.max);
+}
+
+function saveOptionManagerValues(config, values) {
+  const settings = getSavedOptionSettings();
+  settings[config.key] = uniqueOptionManagerValues(values.map((value) => config.normalize(value)), config.max);
+  settings[config.customKey] = true;
   saveOptionSettings(settings);
-  window.alert(`${config.title} menu options have been saved for future entries.`);
+}
+
+function uniqueOptionManagerValues(values, max) {
+  const uniqueValues = values.reduce((result, value) => {
+    const cleaned = String(value || "").trim();
+    if (!cleaned || result.some((candidate) => valuesMatch(candidate, cleaned))) {
+      return result;
+    }
+
+    result.push(cleaned);
+    return result;
+  }, []);
+
+  return Number.isFinite(max) ? uniqueValues.slice(0, max) : uniqueValues;
+}
+
+function valuesMatch(left, right) {
+  return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
 }
 
 async function importExpenses(event) {

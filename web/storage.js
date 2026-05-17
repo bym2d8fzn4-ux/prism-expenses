@@ -267,27 +267,29 @@ export function saveOptionSettings(settings) {
 
 export function getCategoryOptions(expenses = []) {
   const settings = getSavedOptionSettings();
-  return uniqueOptions([
-    ...DEFAULT_CATEGORY_OPTIONS,
-    ...settings.categoryOptions,
-    ...expenses.map((expense) => expense.category),
-  ]);
+  const sourceOptions = settings.categoryOptionsCustomized
+    ? settings.categoryOptions
+    : [...DEFAULT_CATEGORY_OPTIONS, ...expenses.map((expense) => expense.category)];
+
+  return uniqueOptions(sourceOptions);
 }
 
 export function getAircraftOptions(expenses = []) {
   const settings = getSavedOptionSettings();
-  return uniqueOptions([
-    ...settings.aircraftOptions,
-    ...expenses.map((expense) => expense.aircraft),
-  ]);
+  const sourceOptions = settings.aircraftOptionsCustomized
+    ? settings.aircraftOptions
+    : [...settings.aircraftOptions, ...expenses.map((expense) => expense.aircraft)];
+
+  return uniqueOptions(sourceOptions);
 }
 
 export function getTripOptions(expenses = []) {
   const settings = getSavedOptionSettings();
-  return uniqueOptions([
-    ...settings.tripOptions,
-    ...expenses.map((expense) => expense.tripNumber),
-  ]).slice(0, 10);
+  const sourceOptions = settings.tripOptionsCustomized
+    ? settings.tripOptions
+    : [...settings.tripOptions, ...expenses.map((expense) => expense.tripNumber)];
+
+  return uniqueOptions(sourceOptions).slice(0, 10);
 }
 
 export function extractImportedExpenseRecords(payload) {
@@ -494,10 +496,26 @@ function uniqueOptions(options) {
 }
 
 function normalizeOptionSettings(settings) {
+  const hasCategoryOptions = Array.isArray(settings?.categoryOptions) || Array.isArray(settings?.categories);
+  const hasAircraftOptions = Array.isArray(settings?.aircraftOptions) || Array.isArray(settings?.aircraft);
+  const hasTripOptions = Array.isArray(settings?.tripOptions) || Array.isArray(settings?.trips);
+  const hasCategoryCustomizationFlag = typeof settings?.categoryOptionsCustomized === "boolean";
+  const hasAircraftCustomizationFlag = typeof settings?.aircraftOptionsCustomized === "boolean";
+  const hasTripCustomizationFlag = typeof settings?.tripOptionsCustomized === "boolean";
+
   return {
     categoryOptions: uniqueOptions(settings?.categoryOptions || settings?.categories || []),
     aircraftOptions: uniqueOptions(settings?.aircraftOptions || settings?.aircraft || []),
     tripOptions: uniqueOptions(settings?.tripOptions || settings?.trips || []).slice(0, 10),
+    categoryOptionsCustomized: hasCategoryCustomizationFlag
+      ? settings.categoryOptionsCustomized
+      : hasCategoryOptions,
+    aircraftOptionsCustomized: hasAircraftCustomizationFlag
+      ? settings.aircraftOptionsCustomized
+      : hasAircraftOptions,
+    tripOptionsCustomized: hasTripCustomizationFlag
+      ? settings.tripOptionsCustomized
+      : hasTripOptions,
   };
 }
 

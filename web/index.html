@@ -129,7 +129,7 @@
 
   <div class="report-modal" id="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title" hidden>
     <div class="report-modal-scrim" id="report-modal-scrim"></div>
-    <form class="report-modal-card report-options-card card" id="report-options-form">
+    <form class="report-modal-card report-options-card card" id="report-options-form" tabindex="-1">
       <header class="report-modal-header">
         <div>
           <p class="eyebrow">Report Options</p>
@@ -187,6 +187,27 @@
         <button class="primary-button" id="report-export-button" type="submit">Export</button>
       </div>
     </form>
+  </div>
+
+  <div class="report-modal" id="option-modal" role="dialog" aria-modal="true" aria-labelledby="option-modal-title" hidden>
+    <div class="report-modal-scrim" id="option-modal-scrim"></div>
+    <section class="report-modal-card option-manager-card card" tabindex="-1">
+      <header class="report-modal-header">
+        <div>
+          <p class="eyebrow">Menu Options</p>
+          <h2 id="option-modal-title">Options</h2>
+          <p class="report-modal-copy" id="option-modal-copy">Edit the choices shown when creating a new entry.</p>
+        </div>
+        <button class="inline-button" id="option-close-button" type="button">Done</button>
+      </header>
+
+      <div class="option-list" id="option-list"></div>
+
+      <form class="option-add-form" id="option-add-form">
+        <input id="option-new-value" type="text" maxlength="60" placeholder="Add option" autocomplete="off">
+        <button class="primary-button" id="option-add-button" type="submit">Add</button>
+      </form>
+    </section>
   </div>
 
   <script src="app.js" type="module"></script>
