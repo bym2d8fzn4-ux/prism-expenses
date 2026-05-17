@@ -259,8 +259,8 @@ function buildLedgerGroups(expenses) {
 }
 
 function buildLedgerGroup(group) {
-  const section = document.createElement("details");
-  const summary = document.createElement("summary");
+  const section = document.createElement("section");
+  const summary = document.createElement("div");
   const summaryMain = document.createElement("div");
   const titleBlock = document.createElement("div");
   const summaryLabel = document.createElement("span");
@@ -276,6 +276,7 @@ function buildLedgerGroup(group) {
   section.dataset.groupKey = group.key;
   summary.className = "expense-group-summary";
   summary.setAttribute("role", "button");
+  summary.setAttribute("aria-expanded", "false");
   summary.tabIndex = 0;
   summaryMain.className = "expense-group-summary-main";
   titleBlock.className = "expense-group-title-block";
@@ -300,7 +301,8 @@ function buildLedgerGroup(group) {
   }
   summaryRight.append(chevron);
   summary.append(summaryMain, summaryRight);
-  bindManualDetailsToggle(summary, section);
+  content.hidden = true;
+  bindLedgerGroupToggle(summary, section);
 
   group.expenses.forEach((expense, index) => {
     list.appendChild(buildSubmittedExpenseItem(expense, index));
@@ -327,25 +329,56 @@ function buildGroupActionButton(group) {
   return null;
 }
 
-function bindManualDetailsToggle(summary, details) {
+function bindLedgerGroupToggle(summary, section) {
   summary.addEventListener("click", (event) => {
     if (event.target.closest("[data-action]")) {
-      event.preventDefault();
       return;
     }
 
-    event.preventDefault();
-    details.open = !details.open;
+    toggleLedgerGroup(section);
   });
 
   summary.addEventListener("keydown", (event) => {
+    if (event.target !== summary) {
+      return;
+    }
+
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }
 
     event.preventDefault();
-    details.open = !details.open;
+    toggleLedgerGroup(section);
   });
+}
+
+function toggleLedgerGroup(section) {
+  setLedgerGroupOpen(section, !isLedgerGroupOpen(section));
+}
+
+function setLedgerGroupOpen(section, isOpen) {
+  if (!section) {
+    return;
+  }
+
+  const summary = section.querySelector(".expense-group-summary");
+  const content = section.querySelector(".expense-group-content");
+
+  section.classList.toggle("is-open", isOpen);
+  summary?.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  if (content) {
+    content.hidden = !isOpen;
+  }
+
+  if (!isOpen) {
+    section.querySelectorAll(".submitted-expense-item[open]").forEach((item) => {
+      item.removeAttribute("open");
+    });
+  }
+}
+
+function isLedgerGroupOpen(section) {
+  return Boolean(section?.classList.contains("is-open"));
 }
 
 function getGroupDescriptor(expense) {
@@ -1195,7 +1228,7 @@ function captureSubmittedOpenState() {
   }
 
   return {
-    groups: Array.from(elements.expenseList.querySelectorAll(".expense-group[open]"), (group) => group.dataset.groupKey),
+    groups: Array.from(elements.expenseList.querySelectorAll(".expense-group.is-open"), (group) => group.dataset.groupKey),
     expenses: Array.from(
       elements.expenseList.querySelectorAll(".submitted-expense-item[open]"),
       (item) => item.dataset.expenseId
@@ -1222,13 +1255,13 @@ function restoreSubmittedOpenState(openState, focusExpenseId = "") {
   );
 
   openState.groups.filter(Boolean).forEach((key) => {
-    groupsByKey.get(key)?.setAttribute("open", "");
+    setLedgerGroupOpen(groupsByKey.get(key), true);
   });
 
   if (focusExpenseId) {
     const focusedExpense = expensesById.get(focusExpenseId);
     const parentGroup = focusedExpense?.closest(".expense-group");
-    parentGroup?.setAttribute("open", "");
+    setLedgerGroupOpen(parentGroup, true);
     focusedExpense?.setAttribute("open", "");
   }
 
@@ -1236,7 +1269,7 @@ function restoreSubmittedOpenState(openState, focusExpenseId = "") {
     const item = expensesById.get(id);
     const parentGroup = item?.closest(".expense-group");
 
-    if (!item || !parentGroup?.open) {
+    if (!item || !isLedgerGroupOpen(parentGroup)) {
       return;
     }
 

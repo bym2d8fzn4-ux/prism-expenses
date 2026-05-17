@@ -446,11 +446,13 @@ h2 {
   transition: transform 180ms ease;
 }
 
+.expense-group.is-open > .expense-group-summary,
 .expense-group[open] > .expense-group-summary,
 .submitted-expense-item[open] > .submitted-expense-summary {
   border-bottom: 1px solid rgba(238, 113, 0, 0.16);
 }
 
+.expense-group.is-open > .expense-group-summary .accordion-chevron,
 .expense-group[open] > .expense-group-summary .accordion-chevron,
 .submitted-expense-item[open] > .submitted-expense-summary .accordion-chevron {
   transform: rotate(90deg);
@@ -459,6 +461,10 @@ h2 {
 .expense-group-content,
 .submitted-expense-body {
   padding: 10px 12px 12px;
+}
+
+.expense-group-content[hidden] {
+  display: none;
 }
 
 .expense-group-actions {
