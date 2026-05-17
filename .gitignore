@@ -1,0 +1,19 @@
+.DS_Store
+
+# iOS / Xcode
+DerivedData/
+DerivedDataDevice/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.moved-aside
+
+# Local app data / exports
+*.log
+*.tmp
+*.bak
+
+# Dependency folders if the web app grows into a build step later.
+node_modules/
+dist/
+build/
