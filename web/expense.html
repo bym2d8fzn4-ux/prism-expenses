@@ -27,30 +27,37 @@
     <form id="expense-form" class="native-editor-stack" novalidate>
         <input id="expense-id" type="hidden">
         <input id="existing-photo" type="hidden">
-        <datalist id="trip-number-options"></datalist>
-        <datalist id="aircraft-options"></datalist>
 
         <section class="native-editor-card native-file-card">
-        <fieldset class="entry-type-picker native-segmented-picker">
-          <legend>Entry type</legend>
-          <label class="entry-type-option">
-            <input id="record-type-expense" name="recordType" type="radio" value="expense" checked>
-            <span>Expense</span>
-          </label>
-          <label class="entry-type-option">
-            <input id="record-type-incentive" name="recordType" type="radio" value="incentive">
-            <span>Incentive</span>
-          </label>
-        </fieldset>
+          <fieldset class="entry-type-picker native-segmented-picker">
+            <legend>Entry type</legend>
+            <label class="entry-type-option">
+              <input id="record-type-expense" name="recordType" type="radio" value="expense" checked>
+              <span>Expense</span>
+            </label>
+            <label class="entry-type-option">
+              <input id="record-type-incentive" name="recordType" type="radio" value="incentive">
+              <span>Incentive</span>
+            </label>
+          </fieldset>
 
           <label class="field field-wide receipt-field native-receipt-field">
             <span class="visually-hidden">Receipt photo</span>
+            <span class="file-button-label" id="file-button-label">Choose File</span>
             <input id="photo" name="photo" type="file" accept="image/*,.pdf,application/pdf">
             <div class="receipt-actions">
               <button class="secondary-button compact-action" id="autofill-button" type="button" disabled hidden>Auto-Fill from Receipt</button>
               <p class="scan-status" id="scan-status">Choose a receipt photo to scan amount, vendor, category, and date.</p>
             </div>
           </label>
+
+          <div class="photo-preview" id="photo-preview" hidden>
+            <img id="photo-preview-image" alt="Receipt preview">
+            <div class="photo-preview-actions">
+              <button class="secondary-button compact-action" id="open-preview-button" type="button">Open Large Preview</button>
+              <button class="inline-button danger-inline" id="remove-photo-button" type="button">Remove photo</button>
+            </div>
+          </div>
         </section>
 
         <section class="native-editor-card native-fields-card">
@@ -84,17 +91,14 @@
 
           <label class="field field-wide native-row native-select-row">
             <span>Trip</span>
-            <input id="trip-number" name="tripNumber" type="text" maxlength="40" placeholder="No trip" list="trip-number-options">
+            <select id="trip-number" name="tripNumber"></select>
           </label>
-        </section>
 
-        <div class="photo-preview" id="photo-preview" hidden>
-          <div class="photo-preview-actions">
-            <button class="secondary-button compact-action" id="open-preview-button" type="button">Open Large Preview</button>
-            <button class="inline-button danger-inline" id="remove-photo-button" type="button">Remove photo</button>
+          <div class="native-add-row">
+            <input id="new-trip-number" type="text" maxlength="40" placeholder="Add trip">
+            <button id="add-trip-button" type="button">Add</button>
           </div>
-          <img id="photo-preview-image" alt="Receipt preview">
-        </div>
+        </section>
 
         <details class="native-editor-card details-panel native-details-card" id="optional-details" open>
           <summary>Airport</summary>
@@ -109,8 +113,13 @@
 
             <label class="field field-wide native-row native-select-row">
               <span>Aircraft</span>
-              <input id="aircraft" name="aircraft" type="text" maxlength="40" placeholder="N123PJ" list="aircraft-options">
+              <select id="aircraft" name="aircraft"></select>
             </label>
+
+            <div class="native-add-row">
+              <input id="new-aircraft" type="text" maxlength="40" placeholder="Add aircraft">
+              <button id="add-aircraft-button" type="button">Add</button>
+            </div>
 
             <label class="field field-wide native-row native-notes-row">
               <span class="visually-hidden">Notes</span>

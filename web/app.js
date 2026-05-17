@@ -275,6 +275,8 @@ function buildLedgerGroup(group) {
   section.className = "expense-group";
   section.dataset.groupKey = group.key;
   summary.className = "expense-group-summary";
+  summary.setAttribute("role", "button");
+  summary.tabIndex = 0;
   summaryMain.className = "expense-group-summary-main";
   titleBlock.className = "expense-group-title-block";
   summaryLabel.className = "expense-group-summary-label";
@@ -298,6 +300,7 @@ function buildLedgerGroup(group) {
   }
   summaryRight.append(chevron);
   summary.append(summaryMain, summaryRight);
+  bindManualDetailsToggle(summary, section);
 
   group.expenses.forEach((expense, index) => {
     list.appendChild(buildSubmittedExpenseItem(expense, index));
@@ -322,6 +325,27 @@ function buildGroupActionButton(group) {
   }
 
   return null;
+}
+
+function bindManualDetailsToggle(summary, details) {
+  summary.addEventListener("click", (event) => {
+    if (event.target.closest("[data-action]")) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    details.open = !details.open;
+  });
+
+  summary.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    details.open = !details.open;
+  });
 }
 
 function getGroupDescriptor(expense) {
@@ -1415,6 +1439,7 @@ function csvEscape(value) {
 
 function buildPrintableReportHtml(expenses, total) {
   const generatedDate = formatDate(getToday());
+  const homeUrl = new URL("./index.html", window.location.href).toString();
   const rows = sortExpenses(expenses)
     .map((expense) => `
       <tr>
@@ -1435,6 +1460,9 @@ function buildPrintableReportHtml(expenses, total) {
         <title>Expenses Report</title>
         <style>
           body { margin: 0; padding: 32px; color: #111; font-family: Avenir Next, Helvetica, Arial, sans-serif; background: #f7f0e6; }
+          .report-nav { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; gap: 12px; margin: -12px 0 20px; padding: 10px; border-radius: 999px; background: rgba(255, 251, 245, .92); box-shadow: 0 12px 28px rgba(0,0,0,.12); backdrop-filter: blur(14px); }
+          .report-nav a, .report-nav button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 18px; border: 0; border-radius: 999px; color: #111; background: white; font: inherit; font-weight: 800; text-decoration: none; cursor: pointer; }
+          .report-nav button { background: #ee7100; color: white; }
           .hero { border-radius: 24px; padding: 28px; color: white; background: linear-gradient(135deg, #050505, #251406); }
           .eyebrow { margin: 0 0 8px; color: #e8be84; font-size: 12px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; }
           h1 { margin: 0; font-family: Iowan Old Style, Palatino, serif; font-size: 42px; font-weight: 400; }
@@ -1444,10 +1472,14 @@ function buildPrintableReportHtml(expenses, total) {
           th { color: #6c6257; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; }
           td span { display: block; margin-top: 4px; color: #6c6257; font-size: 12px; }
           .amount { color: #ee7100; font-weight: 800; text-align: right; white-space: nowrap; }
-          @media print { body { background: white; padding: 0; } .hero { break-inside: avoid; } }
+          @media print { body { background: white; padding: 0; } .report-nav { display: none; } .hero { break-inside: avoid; } }
         </style>
       </head>
       <body>
+        <nav class="report-nav" aria-label="Report actions">
+          <a href="${escapeHtml(homeUrl)}">Back to Expenses</a>
+          <button type="button" onclick="window.print()">Save PDF</button>
+        </nav>
         <section class="hero">
           <p class="eyebrow">PrismJet</p>
           <h1>Expenses Report</h1>

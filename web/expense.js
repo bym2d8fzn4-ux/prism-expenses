@@ -5,10 +5,12 @@ import {
   getAircraftOptions,
   getCategoryOptions,
   getExpense,
+  getSavedOptionSettings,
   getStatusKey,
   getToday,
   getTripOptions,
   getViewConfig,
+  saveOptionSettings,
   saveExpense,
   validateDates,
 } from "./storage.js";
@@ -47,15 +49,17 @@ const elements = {
   expenseForm: document.querySelector("#expense-form"),
   expenseId: document.querySelector("#expense-id"),
   existingPhoto: document.querySelector("#existing-photo"),
-  tripNumberOptions: document.querySelector("#trip-number-options"),
-  aircraftOptions: document.querySelector("#aircraft-options"),
   recordTypeExpense: document.querySelector("#record-type-expense"),
   recordTypeIncentive: document.querySelector("#record-type-incentive"),
   amount: document.querySelector("#amount"),
   merchant: document.querySelector("#merchant"),
   category: document.querySelector("#category"),
   tripNumber: document.querySelector("#trip-number"),
+  newTripNumber: document.querySelector("#new-trip-number"),
+  addTripButton: document.querySelector("#add-trip-button"),
   aircraft: document.querySelector("#aircraft"),
+  newAircraft: document.querySelector("#new-aircraft"),
+  addAircraftButton: document.querySelector("#add-aircraft-button"),
   date: document.querySelector("#date"),
   dateLabel: document.querySelector("#date-label"),
   location: document.querySelector("#location"),
@@ -66,6 +70,7 @@ const elements = {
   reimbursedDate: document.querySelector("#reimbursed-date"),
   optionalDetails: document.querySelector("#optional-details"),
   photo: document.querySelector("#photo"),
+  fileButtonLabel: document.querySelector("#file-button-label"),
   photoPreview: document.querySelector("#photo-preview"),
   photoPreviewImage: document.querySelector("#photo-preview-image"),
   openPreviewButton: document.querySelector("#open-preview-button"),
@@ -110,6 +115,20 @@ function bindEvents() {
   elements.expenseForm.addEventListener("submit", handleSaveExpense);
   elements.photo.addEventListener("change", handlePhotoChange);
   elements.removePhotoButton.addEventListener("click", removePhoto);
+  elements.addTripButton.addEventListener("click", addTripOption);
+  elements.newTripNumber.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addTripOption();
+    }
+  });
+  elements.addAircraftButton.addEventListener("click", addAircraftOption);
+  elements.newAircraft.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addAircraftOption();
+    }
+  });
   elements.useLocationButton.addEventListener("click", useCurrentLocation);
   elements.autofillButton.addEventListener("click", handleAutofillReceipt);
   elements.openPreviewButton.addEventListener("click", openImagePreview);
@@ -301,13 +320,13 @@ async function populateTripNumberOptions() {
   try {
     const expenses = await getAllExpenses();
     const tripNumbers = getTripOptions(expenses);
+    const currentValue = elements.tripNumber.value;
 
-    elements.tripNumberOptions.replaceChildren();
+    elements.tripNumber.replaceChildren(buildSelectOption("", "No trip"));
     tripNumbers.forEach((tripNumber) => {
-      const option = document.createElement("option");
-      option.value = tripNumber;
-      elements.tripNumberOptions.appendChild(option);
+      elements.tripNumber.appendChild(buildSelectOption(tripNumber, tripNumber));
     });
+    elements.tripNumber.value = tripNumbers.includes(currentValue) ? currentValue : "";
   } catch (error) {
     console.error("Could not load trip numbers.", error);
   }
@@ -317,16 +336,48 @@ async function populateAircraftOptions() {
   try {
     const expenses = await getAllExpenses();
     const aircraftOptions = getAircraftOptions(expenses);
+    const currentValue = elements.aircraft.value;
 
-    elements.aircraftOptions.replaceChildren();
+    elements.aircraft.replaceChildren(buildSelectOption("", "Select aircraft"));
     aircraftOptions.forEach((aircraft) => {
-      const option = document.createElement("option");
-      option.value = aircraft;
-      elements.aircraftOptions.appendChild(option);
+      elements.aircraft.appendChild(buildSelectOption(aircraft, aircraft));
     });
+    elements.aircraft.value = aircraftOptions.includes(currentValue) ? currentValue : "";
   } catch (error) {
     console.error("Could not load aircraft options.", error);
   }
+}
+
+async function addTripOption() {
+  const tripNumber = elements.newTripNumber.value.trim().toUpperCase();
+  if (!tripNumber) {
+    return;
+  }
+
+  const settings = getSavedOptionSettings();
+  saveOptionSettings({
+    ...settings,
+    tripOptions: [tripNumber, ...settings.tripOptions.filter((option) => option !== tripNumber)].slice(0, 10),
+  });
+  elements.newTripNumber.value = "";
+  await populateTripNumberOptions();
+  elements.tripNumber.value = tripNumber;
+}
+
+async function addAircraftOption() {
+  const aircraft = elements.newAircraft.value.trim().toUpperCase();
+  if (!aircraft) {
+    return;
+  }
+
+  const settings = getSavedOptionSettings();
+  saveOptionSettings({
+    ...settings,
+    aircraftOptions: [...settings.aircraftOptions.filter((option) => option !== aircraft), aircraft],
+  });
+  elements.newAircraft.value = "";
+  await populateAircraftOptions();
+  elements.aircraft.value = aircraft;
 }
 
 async function populateCategoryOptions() {
@@ -360,6 +411,7 @@ async function handlePhotoChange(event) {
     if (isPdfFile(file)) {
       state.currentPhotoDataUrl = "";
       renderPhotoPreview("");
+      elements.fileButtonLabel.textContent = "Replace File";
       setAutofillAvailability(false);
       updateScanStatus("PDF selected. Browser OCR reads photos for now, so enter the details manually.");
       return;
@@ -393,6 +445,7 @@ function removePhoto() {
 
 function renderPhotoPreview(photoDataUrl) {
   elements.photoPreview.hidden = !photoDataUrl;
+  elements.fileButtonLabel.textContent = photoDataUrl ? "Replace File" : "Choose File";
   if (photoDataUrl) {
     elements.photoPreviewImage.src = photoDataUrl;
     elements.imageModalImage.src = photoDataUrl;

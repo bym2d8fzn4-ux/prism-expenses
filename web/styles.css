@@ -2167,3 +2167,174 @@ h2 {
     font-size: 0.98rem;
   }
 }
+
+.hamburger-button {
+  gap: 2px;
+}
+
+.hamburger-button span {
+  width: 25px;
+  height: 3px;
+}
+
+.app-header .hero-copy {
+  display: grid;
+  gap: 20px;
+}
+
+.brand-lockup {
+  margin-bottom: 0;
+}
+
+.native-editor-toolbar {
+  margin-bottom: 72px;
+}
+
+.native-editor-stack {
+  gap: 28px;
+}
+
+.native-editor-card {
+  padding: 18px;
+  border-radius: 26px;
+}
+
+.native-file-card {
+  gap: 12px;
+}
+
+.native-receipt-field {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.native-receipt-field input[type="file"] {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.native-receipt-field input[type="file"]::file-selector-button {
+  display: none;
+}
+
+.file-button-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 999px;
+  background: #e47925;
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.native-receipt-field .receipt-actions {
+  margin-top: 0;
+}
+
+.native-receipt-field .scan-status {
+  margin: 0;
+}
+
+.native-file-card .photo-preview {
+  gap: 12px;
+  margin-top: 0;
+}
+
+.native-file-card .photo-preview img {
+  order: 1;
+  width: 100%;
+  max-height: 238px;
+  border-radius: 18px;
+  object-fit: cover;
+  object-position: top center;
+  background: #e7e7ed;
+}
+
+.native-file-card .photo-preview-actions {
+  order: 2;
+  display: grid;
+  gap: 0;
+}
+
+.native-file-card #open-preview-button {
+  display: none;
+}
+
+.native-file-card #remove-photo-button {
+  justify-content: flex-start;
+  min-height: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #e5484d;
+  font-size: 1rem;
+}
+
+.native-row {
+  min-height: 48px;
+}
+
+.native-row input,
+.native-row select,
+.native-row textarea {
+  min-height: 46px;
+  font-size: 0.98rem;
+}
+
+.native-date-row,
+.native-select-row {
+  grid-template-columns: minmax(98px, auto) minmax(0, 1fr);
+}
+
+.native-date-row > span,
+.native-select-row > span {
+  font-size: 0.98rem;
+}
+
+.native-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 46px;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.1);
+}
+
+.native-add-row input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #111;
+  font-size: 0.98rem;
+}
+
+.native-add-row input:focus {
+  outline: none;
+}
+
+.native-add-row button {
+  min-height: 38px;
+  padding: 0 0 0 14px;
+  border: 0;
+  background: transparent;
+  color: #b5b5bc;
+  font: inherit;
+  font-weight: 700;
+}
+
+.native-add-row button:active {
+  color: #e47925;
+}
